@@ -14,9 +14,15 @@ const REGIONS = E.REGIONS || 'us';
 const MY_BOOK = E.MY_BOOK || 'hardrockbet';
 const REFRESH_MIN = Number(E.REFRESH_MIN) || 180;
 const TRIAL_DAYS = Number(E.TRIAL_DAYS) || 7;
+const SCORES_MIN = Number(E.SCORES_MIN) || 360;   // cada cuánto consultar marcadores (cuesta créditos)
+const PICK_MIN_EV = Number(E.PICK_MIN_EV) || 0.03; // valor mínimo para guardar una selección en el récord
 
+// Limpia el SUPABASE_URL por si se pegó con algo de más (por ejemplo /rest/v1/)
+let SUPA_URL = (E.SUPABASE_URL || '').trim();
+try { if (SUPA_URL) SUPA_URL = new URL(SUPA_URL).origin; } catch (e) { console.error('SUPABASE_URL no es válido'); }
+const SUPA_ANON = (E.SUPABASE_ANON_KEY || '').trim();
 const stripe = E.STRIPE_SECRET_KEY ? Stripe(E.STRIPE_SECRET_KEY) : null;
-const sb = E.SUPABASE_URL && E.SUPABASE_SERVICE_KEY ? createClient(E.SUPABASE_URL, E.SUPABASE_SERVICE_KEY, { auth: { persistSession: false } }) : null;
+const sb = SUPA_URL && E.SUPABASE_SERVICE_KEY ? createClient(SUPA_URL, E.SUPABASE_SERVICE_KEY.trim(), { auth: { persistSession: false } }) : null;
 
 const LABEL = { baseball_mlb: 'MLB', americanfootball_nfl: 'NFL', icehockey_nhl: 'NHL', basketball_nba: 'NBA', soccer_spain_la_liga: 'LaLiga', soccer_epl: 'Premier League', soccer_mexico_ligamx: 'Liga MX', mma_mixed_martial_arts: 'UFC/MMA' };
 // Afiliados: JSON en la variable AFFILIATES, por ejemplo
@@ -82,35 +88,89 @@ function recommend(games) {
   return { safest: sum(safest), value: v && v.legs.length >= 2 ? v : null };
 }
 
-/* ---------- Apuestas: línea de cierre y liquidación ---------- */
+/* ---------- Récord y apuestas: línea de cierre y calificación ---------- */
 async function updateClosing(games) {
   if (!sb) return;
-  const now = Date.now();
-  const { data: open } = await sb.from('bets').select('id,game_id,team').eq('status', 'open').gt('start_time', new Date(now).toISOString());
-  for (const b of open || []) {
-    const g = games.find(x => x.id === b.game_id); if (!g) continue;
-    const o = g.outcomes.find(x => x.name === b.team); if (!o) continue;
-    await sb.from('bets').update({ closing_prob: o.p, closing_odds: o.myPrice || o.best.price }).eq('id', b.id);
+  const nowIso = new Date().toISOString();
+  for (const table of ['bets', 'picks']) {
+    const { data: open } = await sb.from(table).select('id,game_id,team').eq('status', 'open').gt('start_time', nowIso);
+    for (const b of open || []) {
+      const g = games.find(x => x.id === b.game_id); if (!g) continue;
+      const o = g.outcomes.find(x => x.name === b.team); if (!o) continue;
+      const upd = { closing_prob: o.p };
+      if (table === 'bets') upd.closing_odds = o.myPrice || o.best.price;
+      await sb.from(table).update(upd).eq('id', b.id);
+    }
   }
 }
-async function settle() {
+// Guarda cada recomendación la primera vez que aparece. Nunca se borra ni se edita la cuota original.
+async function recordPicks(games, reco) {
   if (!sb) return;
-  const cutoff = new Date(Date.now() - 3 * 3600e3).toISOString();
-  const { data: open } = await sb.from('bets').select('*').eq('status', 'open').lt('start_time', cutoff);
-  if (!open || !open.length) return;
-  for (const sport of [...new Set(open.map(b => b.sport_key))]) {
-    let scores;
-    try { scores = await oddsApi(`sports/${sport}/scores?daysFrom=3`); } catch (e) { console.error(e.message); continue; }
-    for (const b of open.filter(x => x.sport_key === sport)) {
-      const ev = scores.find(s => s.id === b.game_id);
-      if (!ev || !ev.completed || !ev.scores) continue;
-      const mine = Number((ev.scores.find(s => s.name === b.team) || {}).score);
-      const other = Number((ev.scores.find(s => s.name !== b.team) || {}).score);
-      if (isNaN(mine) || isNaN(other)) continue;
-      const status = mine > other ? 'won' : mine < other ? 'lost' : 'push';
-      const profit = status === 'won' ? b.stake * (b.odds_taken - 1) : status === 'lost' ? -b.stake : 0;
-      await sb.from('bets').update({ status, profit }).eq('id', b.id);
+  const now = Date.now(), rows = [];
+  for (const g of games) {
+    if (new Date(g.start).getTime() <= now) continue;
+    for (const o of g.outcomes) {
+      if (o.name === 'Draw') continue;
+      const price = o.myPrice || o.best.price, ev = o.p * price - 1;
+      if (ev >= PICK_MIN_EV && o.p >= 0.25) rows.push({ game_id: g.id, sport_key: g.sport, league: g.league, start_time: g.start, team: o.name, opponent: o.name === g.home ? g.away : g.home, kind: 'valor', prob: o.p, odds: price, book: o.myPrice ? o.myBook : o.best.book, ev, closing_prob: o.p });
     }
+  }
+  if (rows.length) await sb.from('picks').upsert(rows, { onConflict: 'game_id,team,kind', ignoreDuplicates: true });
+  const day = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+  for (const [kind, r] of [['valor', reco.value], ['favoritos', reco.safest]]) {
+    if (!r) continue;
+    const legs = r.legs.map(l => ({ game_id: l.gid, team: l.team, vs: l.vs, league: l.league, start: l.start, sport_key: (games.find(g => g.id === l.gid) || {}).sport, prob: l.p, odds: l.price }));
+    await sb.from('parlays').upsert({ day, kind, legs, prob: r.p, odds: r.price }, { onConflict: 'day,kind', ignoreDuplicates: true });
+  }
+}
+const scoresCache = {};
+async function getScores(sport) {
+  const c = scoresCache[sport];
+  if (c && Date.now() - c.at < SCORES_MIN * 60e3) return c.data;
+  const data = await oddsApi(`sports/${sport}/scores?daysFrom=3`);
+  scoresCache[sport] = { at: Date.now(), data };
+  return data;
+}
+function resultOf(scores, sport, gameId, team) {
+  const ev = (scores[sport] || []).find(s => s.id === gameId);
+  if (!ev || !ev.completed || !ev.scores) return null;
+  const mine = Number((ev.scores.find(s => s.name === team) || {}).score);
+  const other = Number((ev.scores.find(s => s.name !== team) || {}).score);
+  if (isNaN(mine) || isNaN(other)) return null;
+  if (mine === other) return sport.startsWith('soccer') ? 'lost' : 'push'; // en fútbol, el empate pierde la apuesta al ganador
+  return mine > other ? 'won' : 'lost';
+}
+async function gradeAll() {
+  if (!sb) return;
+  const cut = Date.now() - 3 * 3600e3, cutIso = new Date(cut).toISOString();
+  const [{ data: ob }, { data: op }, { data: opl }] = await Promise.all([
+    sb.from('bets').select('*').eq('status', 'open').lt('start_time', cutIso),
+    sb.from('picks').select('*').eq('status', 'open').lt('start_time', cutIso),
+    sb.from('parlays').select('*').eq('status', 'open')
+  ]);
+  const parl = (opl || []).filter(p => (p.legs || []).every(l => new Date(l.start).getTime() < cut));
+  const sports = new Set([...(ob || []), ...(op || [])].map(x => x.sport_key));
+  parl.forEach(p => p.legs.forEach(l => l.sport_key && sports.add(l.sport_key)));
+  if (!sports.size) return;
+  const scores = {};
+  for (const sp of sports) { try { scores[sp] = await getScores(sp); } catch (e) { console.error('Marcadores', sp, e.message); } }
+  for (const b of ob || []) {
+    const r = resultOf(scores, b.sport_key, b.game_id, b.team); if (!r) continue;
+    await sb.from('bets').update({ status: r, profit: r === 'won' ? b.stake * (b.odds_taken - 1) : r === 'lost' ? -b.stake : 0 }).eq('id', b.id);
+  }
+  for (const k of op || []) {
+    const r = resultOf(scores, k.sport_key, k.game_id, k.team); if (!r) continue;
+    await sb.from('picks').update({ status: r, profit: r === 'won' ? k.odds - 1 : r === 'lost' ? -1 : 0 }).eq('id', k.id);
+  }
+  for (const p of parl) {
+    const res = p.legs.map(l => resultOf(scores, l.sport_key, l.game_id, l.team));
+    let status = null, profit = 0;
+    if (res.includes('lost')) { status = 'lost'; profit = -1; }
+    else if (res.every(x => x)) {
+      if (res.every(x => x === 'push')) status = 'push';
+      else { status = 'won'; profit = p.legs.reduce((t, l, i) => t * (res[i] === 'won' ? l.odds : 1), 1) - 1; }
+    }
+    if (status) await sb.from('parlays').update({ status, profit }).eq('id', p.id);
   }
 }
 async function refresh() {
@@ -122,7 +182,7 @@ async function refresh() {
   }
   games.sort((a, b) => new Date(a.start) - new Date(b.start));
   cache = { ...cache, updated: new Date().toISOString(), games, reco: recommend(games), errors };
-  try { await updateClosing(games); await settle(); } catch (e) { console.error('Apuestas:', e.message); }
+  try { await recordPicks(games, cache.reco); await updateClosing(games); await gradeAll(); } catch (e) { console.error('Récord/apuestas:', e.message); }
   console.log(`[${cache.updated}] ${games.length} partidos. Créditos restantes: ${cache.remaining}`);
 }
 
@@ -157,7 +217,7 @@ http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://x');
   const p = url.pathname;
   try {
-    if (p === '/api/config') return send(res, 200, { supabaseUrl: E.SUPABASE_URL, supabaseAnon: E.SUPABASE_ANON_KEY, price: E.PRICE_LABEL || '$99 al mes', trialDays: TRIAL_DAYS, affiliates: AFFILIATES.map(({ key, name, offer, states }) => ({ key, name, offer: offer || '', states: states || [] })) });
+    if (p === '/api/config') return send(res, 200, { supabaseUrl: SUPA_URL, supabaseAnon: SUPA_ANON, price: E.PRICE_LABEL || '$99 al mes', trialDays: TRIAL_DAYS, affiliates: AFFILIATES.map(({ key, name, offer, states }) => ({ key, name, offer: offer || '', states: states || [] })) });
 
     if (p === '/go') {
       const key = url.searchParams.get('b'), target = url.searchParams.get('u');
@@ -184,6 +244,19 @@ http.createServer(async (req, res) => {
         await syncSubscription(o);
       }
       return send(res, 200, { received: true });
+    }
+
+    if (p === '/api/record') {
+      if (!sb) return send(res, 200, { picks: [], parlays: [], pending: 0 });
+      const user = await getUser(req);
+      const prem = user ? isPremium(await getProfile(user)) : false;
+      const [{ data: pk }, { data: pl }] = await Promise.all([
+        sb.from('picks').select('league,start_time,team,opponent,prob,odds,book,ev,closing_prob,status,profit').order('start_time', { ascending: false }).limit(500),
+        sb.from('parlays').select('day,kind,legs,prob,odds,status,profit').order('day', { ascending: false }).limit(120)
+      ]);
+      const picks = pk || [], parlays = pl || [];
+      const pending = picks.filter(x => x.status === 'open').length + parlays.filter(x => x.status === 'open').length;
+      return send(res, 200, { premium: prem, pending, picks: prem ? picks : picks.filter(x => x.status !== 'open'), parlays: prem ? parlays : parlays.filter(x => x.status !== 'open') });
     }
 
     if (p === '/api/data') {
@@ -248,6 +321,20 @@ http.createServer(async (req, res) => {
       return send(res, 404, { error: 'No encontrado' });
     }
 
+    if (p === '/terminos') {
+      const t = fs.readFileSync(path.join(__dirname, 'terminos.html'), 'utf8')
+        .replaceAll('{{CONTACT}}', E.CONTACT_EMAIL || 'el correo de contacto de BetVision')
+        .replaceAll('{{PRICE}}', E.PRICE_LABEL || '$99 al mes')
+        .replaceAll('{{TRIAL}}', String(TRIAL_DAYS))
+        .replaceAll('{{DATE}}', E.TERMS_DATE || '26 de septiembre de 2026');
+      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+      return res.end(t);
+    }
+    const STATIC = { '/manifest.webmanifest': 'application/manifest+json', '/apple-touch-icon.png': 'image/png', '/icon-192.png': 'image/png', '/icon-512.png': 'image/png' };
+    if (STATIC[p] && fs.existsSync(path.join(__dirname, p.slice(1)))) {
+      res.writeHead(200, { 'Content-Type': STATIC[p], 'Cache-Control': 'public, max-age=86400' });
+      return fs.createReadStream(path.join(__dirname, p.slice(1))).pipe(res);
+    }
     res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
     fs.createReadStream(INDEX).pipe(res);
   } catch (e) {

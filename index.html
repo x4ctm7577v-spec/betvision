@@ -4,7 +4,13 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>BetVision (100xBajo)</title>
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔮</text></svg>">
+<link rel="icon" href="/icon-192.png">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="manifest" href="/manifest.webmanifest">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="BetVision">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#0E0A24">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;600;700&family=Manrope:wght@500;600;700;800&display=swap" rel="stylesheet">
 <style>
@@ -97,7 +103,7 @@ details.cal[open] summary::after{content:"−"}
 /* Controles */
 .row{display:flex;gap:10px;flex-wrap:wrap;margin:8px 0 14px;font-size:14px;color:var(--muted);font-weight:600}
 .row label{display:flex;flex-direction:column;gap:5px;flex:1;min-width:140px}
-select,input[type=text],input[type=number]{background:var(--glass2);border:1px solid var(--line);border-radius:14px;padding:10px 12px;font-weight:600}
+select,input[type=text],input[type=number],input[type=email],input[type=password]{color:var(--ink);-webkit-text-fill-color:var(--ink);background:var(--glass2);border:1px solid var(--line);border-radius:14px;padding:10px 12px;font-weight:600}
 select:focus,input:focus{outline:none;border-color:var(--t);box-shadow:0 0 0 3px rgba(47,227,200,.25)}
 select option{color:#17123A}
 h2.day{font-family:var(--disp);font-weight:600;font-size:17px;margin:28px 0 12px;display:flex;align-items:center;gap:10px}
@@ -184,21 +190,28 @@ nav{max-width:480px}
 .wc>div{background:var(--sunk);border-radius:14px;padding:10px}
 .wl{display:block;font-size:12px;font-weight:800;color:var(--muted);margin-bottom:4px}
 .wl.bv{color:var(--t)}
+input::placeholder{color:var(--muted);-webkit-text-fill-color:var(--muted);opacity:1}
+input:-webkit-autofill,input:-webkit-autofill:focus{-webkit-text-fill-color:var(--ink);-webkit-box-shadow:0 0 0 1000px #2A2350 inset;caret-color:var(--ink)}
+:root[data-theme="light"] input:-webkit-autofill{-webkit-box-shadow:0 0 0 1000px #fff inset}
+.pw{position:relative}.pw input{padding-right:48px}
+.eye{position:absolute;right:6px;top:50%;transform:translateY(-50%);background:none;border:0;font-size:20px;cursor:pointer;padding:6px}
+.ck span{display:block}
 </style>
 </head>
 <body>
 <div class="wrap">
  <header class="top"><div class="who"><span class="av" aria-hidden="true">BV</span><div><div class="brand">BetVision <span>(100xBajo)</span></div>
  <div class="stamp" id="stamp">Cargando datos…</div></div></div>
- <button class="round" id="themeBtn" aria-label="Cambiar entre tema oscuro y claro"><svg viewBox="0 0 24 24"><path d="M5 7h14M5 12h14M5 17h14"/></svg></button></header>
+ <button class="round" data-tab="guide" aria-label="Guía, términos y ajustes"><svg viewBox="0 0 24 24"><path d="M5 7h14M5 12h14M5 17h14"/></svg></button></header>
  <main id="view"><div class="panel"><p>Cargando…</p></div></main>
 </div>
 <nav role="tablist">
  <button role="tab" data-tab="games" aria-selected="true"><svg viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="15" rx="2.5"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg>Partidos</button>
  <button role="tab" data-tab="parlay" aria-selected="false"><svg viewBox="0 0 24 24"><rect x="2" y="9" width="3" height="6" rx="1"/><rect x="5.5" y="6.5" width="3.5" height="11" rx="1"/><rect x="15" y="6.5" width="3.5" height="11" rx="1"/><rect x="19" y="9" width="3" height="6" rx="1"/><path d="M9 12h6"/></svg>Parlay<span class="n" id="legN">0</span></button>
+ <button role="tab" data-tab="record" aria-selected="false"><svg viewBox="0 0 24 24"><path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0V4zM17 5h3v2a3 3 0 0 1-3 3M7 5H4v2a3 3 0 0 0 3 3"/></svg>Récord</button>
  <button role="tab" data-tab="bets" aria-selected="false"><svg viewBox="0 0 24 24"><path d="M4 19V5M4 19h16M8 15l4-4 3 3 5-6"/></svg>Apuestas</button>
  <button role="tab" data-tab="account" aria-selected="false"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6"/></svg>Cuenta</button>
- <button role="tab" data-tab="guide" aria-selected="false"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.5"/></svg>Guía</button>
+ 
 </nav>
 <dialog id="dlg"></dialog>
 <div id="toast" role="status" aria-live="polite"></div>
@@ -215,7 +228,8 @@ const short=n=>{const w=n.split(' ');return w.length>1?w[w.length-1]:n};
 const when=iso=>{const d=new Date(iso);return d.toLocaleDateString('es',{weekday:'short',day:'numeric',month:'short'})+', '+d.toLocaleTimeString('es',{hour:'numeric',minute:'2-digit'})};
 const dayKey=iso=>new Date(iso).toLocaleDateString('es',{weekday:'long',day:'numeric',month:'long'});
 const ago=iso=>{const m=Math.round((Date.now()-new Date(iso))/60000);return m<1?'hace un momento':m<60?`hace ${m} min`:`hace ${Math.round(m/60)} h`};
-function toast(t){const el=$('#toast');el.textContent=t;el.style.display='block';clearTimeout(toast.t);toast.t=setTimeout(()=>el.style.display='none',3500)}
+function es(m){m=String(m||'');const M=[[/already registered|already been registered/i,'Ese correo ya tiene cuenta. Toca "Entra aquí".'],[/invalid login credentials/i,'Correo o contraseña incorrectos.'],[/email not confirmed/i,'Primero confirma tu correo: revisa tu bandeja de entrada (y la de spam).'],[/password should be at least/i,'La contraseña debe tener al menos 6 caracteres.'],[/rate limit|too many/i,'Demasiados intentos. Espera unos minutos y vuelve a intentar.'],[/invalid.*email|unable to validate email/i,'Ese correo no parece válido.'],[/failed to fetch|network/i,'No hay conexión con el servidor. Revisa tu internet y vuelve a intentar.'],[/invalid path/i,'Error de configuración del servidor (SUPABASE_URL).']];for(const [r,t] of M)if(r.test(m))return t;return m}
+function toast(t){t=es(t);const el=$('#toast');el.textContent=t;el.style.display='block';clearTimeout(toast.t);toast.t=setTimeout(()=>el.style.display='none',3500)}
 
 let CFG={},SB=null,SESSION=null,ME=null,DATA=null,BETS=null,LEGS=ls.get('bv-legs',[]);
 const S={tab:'games',lg:'all',sort:'time',stake:10,auth:'signup'};
@@ -225,8 +239,9 @@ async function api(path,opt={}){const h={'Content-Type':'application/json'};if(S
   const r=await fetch(path,{...opt,headers:h});const j=await r.json().catch(()=>({}));if(!r.ok)throw Object.assign(new Error(j.error||'Error'),{status:r.status});return j}
 async function loadData(){try{DATA=await api('/api/data')}catch(e){DATA={games:[],errors:['No se pudo conectar con el servidor.']}}
   LEGS=LEGS.filter(k=>DATA.games.some(g=>g.id===k.split('|')[0]));render()}
-async function refreshAll(){ME=null;BETS=null;if(SESSION){try{ME=await api('/api/me')}catch(e){}}await loadData()}
+async function refreshAll(){ME=null;BETS=null;REC=null;if(SESSION){try{ME=await api('/api/me')}catch(e){}}await loadData()}
 async function init(){
+  setTimeout(()=>{if(!DATA)$('#view').innerHTML='<div class="panel"><h2>Despertando BetVision…</h2><p class="note">La primera carga del día puede tardar hasta un minuto mientras el servidor arranca. No cierres la página.</p></div>'},2500);
   try{CFG=await (await fetch('/api/config')).json()}catch(e){}
   if(CFG.supabaseUrl&&window.supabase){SB=window.supabase.createClient(CFG.supabaseUrl,CFG.supabaseAnon);
     const {data}=await SB.auth.getSession();SESSION=data.session;
@@ -238,7 +253,7 @@ async function init(){
 
 const STATES={AL:'Alabama',AK:'Alaska',AZ:'Arizona',AR:'Arkansas',CA:'California',CO:'Colorado',CT:'Connecticut',DE:'Delaware',DC:'Washington D. C.',FL:'Florida',GA:'Georgia',HI:'Hawái',ID:'Idaho',IL:'Illinois',IN:'Indiana',IA:'Iowa',KS:'Kansas',KY:'Kentucky',LA:'Luisiana',ME:'Maine',MD:'Maryland',MA:'Massachusetts',MI:'Míchigan',MN:'Minnesota',MS:'Misisipi',MO:'Misuri',MT:'Montana',NE:'Nebraska',NV:'Nevada',NH:'Nuevo Hampshire',NJ:'Nueva Jersey',NM:'Nuevo México',NY:'Nueva York',NC:'Carolina del Norte',ND:'Dakota del Norte',OH:'Ohio',OK:'Oklahoma',OR:'Oregón',PA:'Pensilvania',RI:'Rhode Island',SC:'Carolina del Sur',SD:'Dakota del Sur',TN:'Tennessee',TX:'Texas',UT:'Utah',VT:'Vermont',VA:'Virginia',WA:'Washington',WV:'Virginia Occidental',WI:'Wisconsin',WY:'Wyoming'};
 const myState=()=>(ME&&ME.state)||ls.get('bv-state','');
-const myBookKey=()=>(ME&&ME.book)||ls.get('bv-book','');
+const myBookKey=()=>(ME&&ME.book)||ls.get('bv-book','')||(myState()==='FL'?'hardrockbet':'');
 function allBooks(){const m={};(DATA&&DATA.games||[]).forEach(g=>g.outcomes.forEach(o=>Object.entries(o.byBook||{}).forEach(([k,v])=>m[k]=v.t)));return Object.entries(m).sort((a,b)=>a[1].localeCompare(b[1]))}
 function quote(o){const bb=o.byBook||{};const k=myBookKey();if(k&&bb[k])return{key:k,title:bb[k].t,price:bb[k].pr,link:bb[k].l,mine:true};
  let best=null;for(const [kk,v] of Object.entries(bb))if(!best||v.pr>best.price)best={key:kk,title:v.t,price:v.pr,link:v.l,mine:false};
@@ -262,7 +277,7 @@ function legs(){if(!DATA||!premium())return[];return LEGS.map(k=>{const [gid,i]=
 /* ----- vistas ----- */
 function cta(){const t=CFG.trialDays||7;return `<section class="cta"><h2>BetVision Premium</h2><p class="note" style="margin:0">Desbloquea lo que te ayuda a decidir con datos:</p>
  <ul><li>Valor de cada cuota y cuota justa</li><li>Parlays recomendados con cuotas en vivo</li><li>Registro de tus apuestas con valor de cierre (CLV)</li><li>Tamaño de apuesta sugerido según tu presupuesto</li></ul>
- <button class="add" data-act="subscribe">Probar ${t} días gratis</button><p style="text-align:center;margin:10px 0 0"><button class="link" data-tab="guide">¿Por qué BetVision y no un influencer?</button></p><p class="note" style="text-align:center;margin:8px 0 0">Luego ${esc(CFG.price||'$99 al mes')}. Cancela cuando quieras. Solo mayores de 21.</p></section>`}
+ <button class="add" data-act="subscribe">Probar ${t} días gratis</button><p style="text-align:center;margin:10px 0 0"><button class="link" data-tab="record">Ver nuestro récord completo</button> · <button class="link" data-tab="guide">¿Por qué BetVision y no un influencer?</button></p><p class="note" style="text-align:center;margin:8px 0 0">Luego ${esc(CFG.price||'$99 al mes')}. Cancela cuando quieras. Solo mayores de 21. <a class="link" href="/terminos">Términos</a></p></section>`}
 function recoBlock(title,sub,r){if(!r)return'';return `<div class="rb"><div class="rd">${title}</div><p class="note" style="margin:0 0 6px">${sub}</p>
  ${r.legs.map(x=>`<div class="rl"><span><span class="ab">${esc(short(x.team))}</span>${esc(x.team)}<br><span class="note">vs ${esc(x.vs)}, ${when(x.start)}</span></span><b>${pct(x.p)}</b></div>`).join('')}
  <div class="rs"><div><span class="note">Probabilidad de ganar</span><div class="big">${pct(r.p)}</div></div><div style="text-align:right"><span class="note">Cuota combinada</span><div class="rf">${us(r.price)}</div><span class="ev ${r.ev>=0?'pos':'neg'}">Valor ${sg(r.ev)}</span></div></div>
@@ -307,11 +322,39 @@ function renderBets(){if(!premium())return cta();
  <p class="note">El CLV compara tu cuota con la probabilidad al cierre. Si es positivo de forma constante, estás apostando mejor que el mercado aunque a corto plazo pierdas algunas.</p>
  <div class="panel"><h2>Historial</h2>${BETS.map(b=>{const c=b.odds_taken*b.closing_prob-1;return `<div class="leg"><span><b>${esc(b.team)}</b> <span class="note">vs ${esc(b.opponent)}</span><br><span class="note">${esc(b.league)}, ${when(b.start_time)}. ${money(+b.stake)} a ${us(+b.odds_taken)}. Cierre justo ${us(1/b.closing_prob)}, CLV <span class="${c>=0?'pos':'neg'}">${sg(c)}</span></span></span>
  <span style="text-align:right"><span class="status ${b.status}">${lab[b.status]||b.status}</span><br>${b.status==='open'?`<button class="link" data-del="${b.id}">Borrar</button>`:`<span class="${+b.profit>=0?'pos':'neg'}">${money(+b.profit)}</span>`}</span></div>`}).join('')}</div>`}
+let REC=null;
+const un=x=>(x>=0?'+':'')+x.toFixed(2)+' u';
+function recRow(title,sub,status,profit){const lab={open:'En juego',won:'Ganada',lost:'Perdida',push:'Empate'};
+ return `<div class="leg"><span><b>${title}</b><br><span class="note">${sub}</span></span><span style="text-align:right;flex:none"><span class="status ${status}">${lab[status]||status}</span><br>${status==='open'?'':`<span class="${+profit>=0?'pos':'neg'}">${un(+profit)}</span>`}</span></div>`}
+function renderRecord(){
+ if(REC===null){api('/api/record').then(r=>{REC=r;render()}).catch(()=>{REC={picks:[],parlays:[],pending:0};render()});return '<div class="panel"><p>Cargando el récord…</p></div>'}
+ const P=REC.picks||[],PL=REC.parlays||[];
+ const st=P.filter(x=>x.status!=='open'),w=st.filter(x=>x.status==='won').length,l=st.filter(x=>x.status==='lost').length,pu=st.filter(x=>x.status==='push').length;
+ const units=st.reduce((t,x)=>t+ +(x.profit||0),0),roi=st.length?units/st.length:0;
+ const dec=st.filter(x=>x.status!=='push'),hit=dec.length?w/dec.length:null,avgP=dec.length?dec.reduce((t,x)=>t+ +x.prob,0)/dec.length:null;
+ const cl=P.filter(x=>x.closing_prob).map(x=>x.odds*x.closing_prob-1),clv=cl.length?cl.reduce((a,c)=>a+c,0)/cl.length:null;
+ const ps=PL.filter(x=>x.status!=='open'),pw=ps.filter(x=>x.status==='won').length,pl=ps.filter(x=>x.status==='lost').length,pun=ps.reduce((t,x)=>t+ +(x.profit||0),0);
+ const f=S.recF||'all',keep=x=>f==='all'||x.status===f;
+ let h=`<div class="panel"><h2>Récord de BetVision</h2><p>Cada recomendación queda guardada <b>automáticamente</b>, con la cuota del momento, y se califica sola al terminar el partido. <b>Las perdidas también se muestran. Nada se borra.</b></p></div>`;
+ if(!P.length&&!PL.length&&!REC.pending)return h+`<div class="panel"><p>El récord empezó el día que BetVision se puso en línea. Las primeras recomendaciones aparecerán aquí en cuanto terminen sus partidos.</p></div>`;
+ h+=`<div class="kpis"><div class="kpi"><div class="l">Selecciones con valor</div><div class="big">${w}–${l}${pu?'–'+pu:''}</div><div class="l">ganadas–perdidas${pu?'–empates':''}</div></div>
+ <div class="kpi"><div class="l">Ganancia</div><div class="big">${st.length?un(units):'—'}</div><div class="l">ROI ${st.length?sg(roi):'—'}</div></div>
+ <div class="kpi"><div class="l">Acierto real</div><div class="big">${hit==null?'—':pct(hit)}</div><div class="l">Probabilidad media: ${avgP==null?'—':pct(avgP)}</div></div>
+ <div class="kpi"><div class="l">CLV promedio</div><div class="big">${clv==null?'—':sg(clv)}</div><div class="l">contra la cuota de cierre</div></div>
+ <div class="kpi"><div class="l">Parlays del día</div><div class="big">${pw}–${pl}</div><div class="l">${ps.length?un(pun):'sin calificar aún'}</div></div></div>
+ <p class="note"><b>1 unidad (u)</b> es el monto fijo que apostarías cada vez, por ejemplo $10. Si el modelo está bien calibrado, el acierto real debería parecerse a la probabilidad media. Con pocas selecciones, los números cambian mucho; el récord se vuelve confiable con cientos de resultados.</p>`;
+ if(!REC.premium&&REC.pending)h+=`<div class="cta"><h2>${REC.pending} recomendaciones en juego</h2><p class="note">Con Premium las ves antes de que empiece el partido, no solo el resultado.</p><button class="add" data-act="subscribe">Probar ${CFG.trialDays||7} días gratis</button></div>`;
+ h+=`<div class="chips" style="display:flex;gap:8px;margin:14px 0 4px">${[['all','Todas'],['won','Ganadas'],['lost','Perdidas']].concat(REC.premium?[['open','En juego']]:[]).map(([k,t])=>`<button class="btn2" data-recf="${k}" style="${f===k?'background:var(--grad);color:#fff;border-color:transparent':''}">${t}</button>`).join('')}</div>`;
+ const pk=P.filter(keep),pp=PL.filter(keep);
+ h+=`<div class="panel"><h2>Selecciones con valor</h2>${pk.length?pk.slice(0,150).map(x=>recRow(`${esc(x.team)} <span class="note">vs ${esc(x.opponent)}</span>`,`${esc(x.league)}, ${when(x.start_time)}. ${us(+x.odds)} en ${esc(x.book||'la mejor casa')}, probabilidad ${pct(+x.prob)}, valor ${sg(+x.ev)}`,x.status,x.profit)).join(''):'<p class="note">Nada en este filtro todavía.</p>'}</div>`;
+ h+=`<div class="panel"><h2>Parlays recomendados</h2>${pp.length?pp.slice(0,60).map(x=>recRow(`${x.kind==='valor'?'Más valor':'Más probable'}, ${new Date(x.day+'T12:00:00').toLocaleDateString('es',{day:'numeric',month:'short'})}`,`${(x.legs||[]).map(l=>esc(l.team)).join(' + ')}. Cuota ${us(+x.odds)}, probabilidad ${pct(+x.prob)}`,x.status,x.profit)).join(''):'<p class="note">Nada en este filtro todavía.</p>'}</div>`;
+ return h}
+
 function renderAccount(){
  if(!SB)return '<div class="panel"><h2>Cuenta</h2><p>Las cuentas aún no están configuradas en el servidor (faltan las variables de Supabase).</p></div>';
  if(!SESSION){const up=S.auth==='signup';return `<div class="panel"><h2>${up?'Crea tu cuenta':'Entra a tu cuenta'}</h2><form class="form" id="authForm">
-  <input type="email" name="email" placeholder="Correo" required autocomplete="email"><input type="password" name="password" placeholder="Contraseña (mínimo 6)" minlength="6" required autocomplete="${up?'new-password':'current-password'}">
-  ${up?`<label class="ck"><input type="checkbox" name="age" required>Confirmo que tengo 21 años o más.</label><label class="ck"><input type="checkbox" name="terms" required>Entiendo que BetVision ofrece análisis informativos, no garantiza ganancias y no es una casa de apuestas.</label>`:''}
+  <input type="email" name="email" placeholder="Correo electrónico" required autocomplete="email" autocapitalize="none"><div class="pw"><input type="password" id="pwd" name="password" placeholder="Contraseña (mínimo 6)" minlength="6" required autocomplete="${up?'new-password':'current-password'}"><button type="button" class="eye" data-act="eye" aria-label="Mostrar contraseña">👁</button></div>
+  ${up?`<label class="ck"><input type="checkbox" name="age" required>Confirmo que tengo 21 años o más.</label><label class="ck"><input type="checkbox" name="terms" required><span>Entiendo que BetVision ofrece análisis informativos, no garantiza ganancias y no es una casa de apuestas, y acepto los <a href="/terminos" target="_blank" class="link">Términos y la Política de privacidad</a>.</span></label>`:''}
   <button class="add" type="submit">${up?'Crear cuenta':'Entrar'}</button></form>
   <p class="note">${up?'¿Ya tienes cuenta? <button class="link" data-auth="login">Entra aquí</button>':'¿No tienes cuenta? <button class="link" data-auth="signup">Créala aquí</button>. <button class="link" data-act="reset">Olvidé mi contraseña</button>'}</p></div>`}
  const st={active:'Premium activo',trialing:'Prueba Premium activa',past_due:'Pago pendiente',canceled:'Cancelada',none:'Plan gratis'};
@@ -323,24 +366,24 @@ function renderAccount(){
 
 function whyPanel(){const r=(t,a,b)=>`<div class="why"><div class="wt">${t}</div><div class="wc"><div><span class="wl">Influencer</span>${a}</div><div><span class="wl bv">BetVision</span>${b}</div></div></div>`;
  return `<div class="panel" id="por-que"><h2>¿Por qué BetVision y no un influencer?</h2><p>Un influencer te da su opinión. BetVision te da los números para que decidas tú.</p>
- ${r('Su récord','Muchos solo publican sus aciertos. Sus pérdidas son difíciles de comprobar.','Cada apuesta que registras queda guardada con su cuota y su resultado. Tu historial lo ves tú, completo.')}
+ ${r('Su récord','Muchos solo publican sus aciertos. Sus pérdidas son difíciles de comprobar.','Cada recomendación queda guardada sola con su cuota y su resultado, ganada o perdida. El récord completo es público.')}
  ${r('El método','Opinión, intuición o el análisis de una sola persona.','Compara las cuotas de todas las casas, les quita su margen y calcula la probabilidad de consenso de todo el mercado.')}
  ${r('La cuota','Cuando ves su pick, miles ya lo siguieron y la cuota empeoró.','Te muestra en ese momento la mejor cuota disponible y si todavía tiene valor.')}
  ${r('Cómo gana dinero','Muchos cobran comisión de las casas por cada seguidor que se registra, y rara vez lo dicen.',(CFG.affiliates||[]).length?'Cobra una suscripción y puede recibir comisión si abres cuenta desde sus enlaces. Te lo dice claramente, y eso nunca cambia las probabilidades ni el valor que te muestra.':'Cobra una suscripción fija. No gana nada cuando tú pierdes.')}
  ${r('Cuánto apostar','Te dice qué jugar, pero rara vez cuánto según tu presupuesto.','Te sugiere un monto pequeño según tu presupuesto, nunca más del 2 % por apuesta.')}
  ${r('Cómo sabes si funciona','Esperas a ver si gana o pierde.','El CLV te dice si estás apostando mejor que el mercado, incluso antes de ver resultados.')}
- <p class="note">Ninguna persona ni herramienta garantiza ganancias. La diferencia es que con BetVision puedes comprobarlo todo.</p></div>`}
+ <p class="note">Ninguna persona ni herramienta garantiza ganancias. La diferencia es que con BetVision puedes comprobarlo todo, empezando por el <button class="link" data-tab="record">récord completo</button>.</p></div>`}
 
-function renderGuide(){return whyPanel()+(SESSION?'':booksPanel())+`<div class="panel"><h2>Cómo leer BetVision</h2><ul><li><b>Probabilidad:</b> consenso de todas las casas sin su margen.</li><li><b>Valor:</b> probabilidad por cuota menos 1. Verde significa que la cuota paga más de lo justo.</li><li><b>CLV:</b> si tu cuota es mejor que la de cierre de forma constante, vas por buen camino.</li><li>Pocas selecciones con valor rinden más que muchos favoritos juntos.</li></ul></div>
- <div class="panel"><p class="note">BetVision ofrece análisis informativos. No es una casa de apuestas, no acepta apuestas y no garantiza ganancias. Solo para mayores de 21 años y donde las apuestas deportivas sean legales.</p><p class="note">Juego responsable: si apostar deja de ser entretenimiento, busca ayuda. En EE. UU.: 1-800-GAMBLER. (esto es 100 pa bajo)</p></div>`}
+function renderGuide(){return `<div class="panel"><h2>Ajustes</h2><button class="btn2" data-act="theme">Cambiar tema claro u oscuro</button></div>`+whyPanel()+(SESSION?'':booksPanel())+`<div class="panel"><h2>Cómo leer BetVision</h2><ul><li><b>Probabilidad:</b> consenso de todas las casas sin su margen.</li><li><b>Valor:</b> probabilidad por cuota menos 1. Verde significa que la cuota paga más de lo justo.</li><li><b>CLV:</b> si tu cuota es mejor que la de cierre de forma constante, vas por buen camino.</li><li>Pocas selecciones con valor rinden más que muchos favoritos juntos.</li></ul></div>
+ <div class="panel"><p class="note">BetVision ofrece análisis informativos. No es una casa de apuestas, no acepta apuestas y no garantiza ganancias. Solo para mayores de 21 años y donde las apuestas deportivas sean legales.</p><p class="note">Juego responsable: si apostar deja de ser entretenimiento, busca ayuda. En EE. UU.: 1-800-GAMBLER. (esto es 100 pa bajo)</p><p class="note"><a class="link" href="/terminos">Términos y Política de privacidad</a></p></div>`}
 function render(){if(!DATA)return;$('#stamp').textContent=DATA.updated?'Actualizado '+ago(DATA.updated):'Cargando datos…';
  const err=(DATA.errors||[]).length?`<div class="warn"><b>Aviso:</b> ${DATA.errors.map(esc).join('<br>')}</div>`:'';
- const V={games:renderGames,parlay:renderParlay,bets:renderBets,account:renderAccount,guide:renderGuide};
+ const V={games:renderGames,parlay:renderParlay,record:renderRecord,bets:renderBets,account:renderAccount,guide:renderGuide};
  $('#view').innerHTML=(S.tab==='games'?err:'')+V[S.tab]();
  document.querySelectorAll('nav button').forEach(b=>b.setAttribute('aria-selected',b.dataset.tab===S.tab));$('#legN').textContent=legs().length}
 
 /* ----- acciones ----- */
-async function act(a){try{
+async function act(a){if(a==='theme'){const c=document.documentElement.dataset.theme==='light'?'dark':'light';document.documentElement.dataset.theme=c;ls.set('bv-theme',c);return}if(a==='eye'){const i=$('#pwd');if(i){i.type=i.type==='password'?'text':'password';const b=document.querySelector('.eye');if(b)b.setAttribute('aria-label',i.type==='password'?'Mostrar contraseña':'Ocultar contraseña')}return}try{
  if(a==='subscribe'){if(!SESSION){S.tab='account';S.auth='signup';render();toast('Crea tu cuenta para empezar la prueba.');return}const r=await api('/api/checkout',{method:'POST'});location.href=r.url}
  else if(a==='portal'){const r=await api('/api/portal',{method:'POST'});location.href=r.url}
  else if(a==='bankroll'){const v=+$('#bankroll').value||0;ME=await api('/api/me',{method:'PUT',body:JSON.stringify({bankroll:v})}).then(r=>({...ME,...r}));toast('Presupuesto guardado.');render()}
@@ -356,11 +399,12 @@ function openReg(k){const [gid,i]=k.split('|');const g=DATA.games.find(x=>x.id==
 document.addEventListener('submit',async e=>{
  if(e.target.id==='authForm'){e.preventDefault();const f=new FormData(e.target),email=f.get('email'),password=f.get('password');
   try{if(S.auth==='signup'){const {error}=await SB.auth.signUp({email,password,options:{data:{age_21_confirmed:true,terms_accepted_at:new Date().toISOString()},emailRedirectTo:location.origin}});if(error)throw error;toast('Revisa tu correo para confirmar la cuenta.');S.auth='login';render()}
-   else{const {error}=await SB.auth.signInWithPassword({email,password});if(error)throw error;toast('¡Bienvenido!')}}catch(err){toast(err.message==='Invalid login credentials'?'Correo o contraseña incorrectos.':err.message)}}
+   else{const {error}=await SB.auth.signInWithPassword({email,password});if(error)throw error;toast('¡Bienvenido!')}}catch(err){toast(err.message)}}
  if(e.target.id==='regForm'&&e.submitter&&e.submitter.value==='ok'){e.preventDefault();const f=new FormData(e.target),odds=dec(f.get('odds')),stake=+f.get('stake');const [gid,i]=$('#dlg').dataset.k.split('|');
   if(!odds){toast('Escribe la cuota como -150 o +130.');return}
   try{await api('/api/bets',{method:'POST',body:JSON.stringify({gid,idx:+i,odds,stake})});$('#dlg').close();BETS=null;toast('Apuesta registrada.')}catch(err){toast(err.message)}}});
-document.addEventListener('click',e=>{const t=e.target.closest('[data-tab],[data-lg],[data-leg],[data-rm],[data-set],[data-act],[data-auth],[data-reg],[data-del]');if(!t)return;
+document.addEventListener('click',e=>{const t=e.target.closest('[data-tab],[data-lg],[data-leg],[data-rm],[data-set],[data-act],[data-auth],[data-reg],[data-del],[data-recf]');if(!t)return;
+ if(t.dataset.recf){S.recF=t.dataset.recf;render();return}
  if(t.dataset.act)return act(t.dataset.act);
  if(t.dataset.reg)return openReg(t.dataset.reg);
  if(t.dataset.del){if(confirm('¿Borrar esta apuesta?'))api('/api/bets?id='+t.dataset.del,{method:'DELETE'}).then(()=>{BETS=null;render()});return}
@@ -371,7 +415,7 @@ document.addEventListener('click',e=>{const t=e.target.closest('[data-tab],[data
  ls.set('bv-legs',LEGS);const y=window.scrollY;render();if(!t.dataset.tab)window.scrollTo(0,y)});
 document.addEventListener('change',e=>{if(e.target.id==='stateSel')return savePref('state',e.target.value);if(e.target.id==='bookSel')return savePref('book',e.target.value);if(e.target.id==='sort'){S.sort=e.target.value;render()}if(e.target.id==='stake'){S.stake=Math.max(1,+e.target.value||1);render()}});
 const TH=ls.get('bv-theme',null);if(TH)document.documentElement.dataset.theme=TH;
-$('#themeBtn').addEventListener('click',()=>{const c=document.documentElement.dataset.theme==='light'?'dark':'light';document.documentElement.dataset.theme=c;ls.set('bv-theme',c)});
+
 init();
 
 </script>

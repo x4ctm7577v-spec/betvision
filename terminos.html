@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Términos y privacidad | BetVision (100xBajo)</title>
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="icon" href="/icon-192.png">
+<style>
+:root{--bg:#0E0A24;--ink:#fff;--muted:#CBC5EC;--line:rgba(255,255,255,.13);--acc:#B9A6FF;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:light){:root:not([data-theme="dark"]){--bg:#F3F1FF;--ink:#17123A;--muted:#4E4880;--line:rgba(60,40,160,.14);--acc:#5B3BE6}}
+:root[data-theme="light"]{--bg:#F3F1FF;--ink:#17123A;--muted:#4E4880;--line:rgba(60,40,160,.14);--acc:#5B3BE6}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font-family:"Segoe UI",Roboto,Helvetica,Arial,sans-serif;line-height:1.6}
+main{max-width:720px;margin:0 auto;padding:24px 18px 60px}
+h1{font-size:28px;margin:8px 0 4px}h2{font-size:19px;margin:28px 0 6px;padding-top:16px;border-top:1px solid var(--line)}
+p,li{color:var(--muted)}b{color:var(--ink)}a{color:var(--acc);font-weight:700}
+.back{display:inline-block;margin-bottom:10px}
+</style>
+</head>
+<body>
+<main>
+<a class="back" href="/">← Volver a BetVision</a>
+<h1>Términos de servicio y privacidad</h1>
+<p>Última actualización: {{DATE}}</p>
+
+<h2>1. Qué es BetVision</h2>
+<p>BetVision (100xBajo) es una herramienta de <b>análisis deportivo informativo</b>. Muestra probabilidades calculadas a partir de las cuotas públicas de varias casas de apuestas, el valor estimado de cada cuota y herramientas para registrar tus propias apuestas. <b>BetVision no es una casa de apuestas</b>: no acepta apuestas, no guarda tu dinero de juego y no paga premios.</p>
+
+<h2>2. Edad y ubicación</h2>
+<p>Para usar BetVision debes tener <b>21 años o más</b>. Eres responsable de apostar solo en casas con licencia en el estado donde te encuentras y de cumplir las leyes que te apliquen.</p>
+
+<h2>3. Sin garantía de resultados</h2>
+<p>Las probabilidades y recomendaciones son estimaciones y <b>pueden fallar</b>. Los resultados pasados no garantizan resultados futuros. BetVision <b>no garantiza ganancias</b> y no se hace responsable de las pérdidas derivadas de tus decisiones de apuesta. Tú decides cuándo, dónde y cuánto apostar.</p>
+
+<h2>4. Suscripción Premium</h2>
+<ul>
+<li><b>Precio:</b> {{PRICE}}, cobrado por adelantado cada mes a través de Stripe.</li>
+<li><b>Prueba gratis:</b> las cuentas nuevas pueden tener una prueba de {{TRIAL}} días. Si no cancelas antes de que termine, se cobra el primer mes.</li>
+<li><b>Cancelación:</b> puedes cancelar cuando quieras desde la pestaña Cuenta. Conservas el acceso Premium hasta el final del periodo ya pagado.</li>
+<li><b>Reembolsos:</b> los periodos ya cobrados no se reembolsan, salvo que la ley exija lo contrario. Si crees que hubo un cobro por error, escríbenos.</li>
+</ul>
+
+<h2>5. Enlaces a casas de apuestas y comisiones</h2>
+<p>Algunos enlaces llevan a casas de apuestas de terceros. BetVision <b>puede recibir una comisión</b> si abres una cuenta desde esos enlaces. Esa comisión nunca cambia las probabilidades ni el valor que te mostramos. Cada casa tiene sus propios términos, que debes revisar.</p>
+
+<h2>6. Uso aceptable</h2>
+<p>No puedes copiar, revender ni redistribuir el contenido de BetVision, ni usar programas automáticos para extraer sus datos. Podemos suspender cuentas que incumplan estos términos.</p>
+
+<h2>7. Privacidad: qué datos guardamos</h2>
+<ul>
+<li><b>Tu cuenta:</b> correo electrónico y la confirmación de edad y de estos términos.</li>
+<li><b>Tus preferencias:</b> estado, casa de apuestas preferida y presupuesto, si los escribes.</li>
+<li><b>Tus apuestas registradas:</b> equipo, cuota, monto y resultado, solo las que tú registras.</li>
+<li><b>Clics en enlaces</b> a casas de apuestas, para medir su uso.</li>
+<li><b>Pagos:</b> los procesa Stripe. BetVision no ve ni guarda los números de tu tarjeta.</li>
+</ul>
+<p><b>No vendemos tus datos.</b> Solo los compartimos con los servicios necesarios para que la app funcione (Supabase para cuentas y datos, Stripe para pagos y Render para el servidor). Puedes pedirnos que borremos tu cuenta y tus datos escribiéndonos.</p>
+
+<h2>8. Juego responsable</h2>
+<p>Si apostar deja de ser entretenimiento, busca ayuda. En EE. UU.: 1-800-GAMBLER. (esto es 100 pa bajo)</p>
+
+<h2>9. Cambios y contacto</h2>
+<p>Podemos actualizar estos términos; la fecha de arriba indica la última versión. Para dudas, cancelaciones o para borrar tus datos, escríbenos a <b>{{CONTACT}}</b>.</p>
+</main>
+<script>try{const t=localStorage.getItem('bv-theme');if(t)document.documentElement.dataset.theme=JSON.parse(t)}catch(e){}</script>
+</body>
+</html>
