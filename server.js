@@ -187,7 +187,10 @@ async function refresh() {
 }
 
 /* ---------- Usuarios y suscripción ---------- */
-const isPremium = p => !!p && ['active', 'trialing'].includes(p.sub_status);
+const paying = p => !!p && ['active', 'trialing'].includes(p.sub_status);
+const onAppTrial = p => !!p && !!p.trial_ends && new Date(p.trial_ends).getTime() > Date.now();
+// Premium = suscripción de Stripe activa, o los días de prueba gratis sin tarjeta
+const isPremium = p => paying(p) || onAppTrial(p);
 async function getUser(req) {
   const h = req.headers.authorization || '';
   if (!sb || !h.startsWith('Bearer ')) return null;
@@ -196,7 +199,16 @@ async function getUser(req) {
 }
 async function getProfile(user) {
   let { data } = await sb.from('profiles').select('*').eq('id', user.id).maybeSingle();
-  if (!data) { ({ data } = await sb.from('profiles').insert({ id: user.id, email: user.email }).select().single()); }
+  if (!data) {
+    // Cuenta nueva: empieza la prueba gratis sin tarjeta
+    const trial_ends = new Date(Date.now() + TRIAL_DAYS * 864e5).toISOString();
+    ({ data } = await sb.from('profiles').insert({ id: user.id, email: user.email, trial_ends }).select().single());
+  } else if (!data.trial_ends) {
+    // Cuentas creadas antes de este cambio: la prueba cuenta desde que se registraron
+    const trial_ends = new Date(new Date(data.created_at || Date.now()).getTime() + TRIAL_DAYS * 864e5).toISOString();
+    await sb.from('profiles').update({ trial_ends }).eq('id', user.id);
+    data.trial_ends = trial_ends;
+  }
   return data;
 }
 async function syncSubscription(sub) {
@@ -270,7 +282,7 @@ http.createServer(async (req, res) => {
       if (!user) return send(res, 401, { error: 'Inicia sesión' });
       const prof = await getProfile(user);
 
-      if (p === '/api/me' && req.method === 'GET') return send(res, 200, { email: user.email, premium: isPremium(prof), sub_status: prof.sub_status, period_end: prof.period_end, bankroll: Number(prof.bankroll) || 0, state: prof.state || '', book: prof.book || '' });
+      if (p === '/api/me' && req.method === 'GET') return send(res, 200, { email: user.email, premium: isPremium(prof), paying: paying(prof), on_trial: onAppTrial(prof) && !paying(prof), trial_ends: prof.trial_ends, sub_status: prof.sub_status, period_end: prof.period_end, bankroll: Number(prof.bankroll) || 0, state: prof.state || '', book: prof.book || '' });
       if (p === '/api/me' && req.method === 'PUT') {
         const b = JSON.parse((await readBody(req)).toString() || '{}');
         const upd = {};
@@ -284,7 +296,8 @@ http.createServer(async (req, res) => {
         const session = await stripe.checkout.sessions.create({
           mode: 'subscription',
           line_items: [{ price: E.STRIPE_PRICE_ID, quantity: 1 }],
-          subscription_data: prof.had_trial ? undefined : { trial_period_days: TRIAL_DAYS },
+          // Si todavía le quedan días de prueba (más de 2), el primer cobro llega cuando termina la prueba
+          subscription_data: onAppTrial(prof) && new Date(prof.trial_ends).getTime() - Date.now() > 2 * 864e5 ? { trial_end: Math.floor(new Date(prof.trial_ends).getTime() / 1000) } : undefined,
           client_reference_id: user.id,
           ...(prof.stripe_customer_id ? { customer: prof.stripe_customer_id } : { customer_email: user.email }),
           success_url: `${APP_URL}/?pago=ok`, cancel_url: `${APP_URL}/?pago=cancelado`
