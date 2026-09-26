@@ -1,0 +1,8 @@
+{
+  "name": "betvision",
+  "version": "1.0.0",
+  "description": "BetVision (100xBajo) - cuotas en vivo, probabilidades de consenso y parlays",
+  "main": "server.js",
+  "scripts": { "start": "node server.js" },
+  "engines": { "node": ">=18" }
+}
