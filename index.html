@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>BetVision (100xBajo)</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔮</text></svg>">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;600;700&family=Manrope:wght@500;600;700;800&display=swap" rel="stylesheet">
 <style>
 :root{
@@ -153,6 +154,36 @@ nav svg{width:22px;height:22px;stroke:currentColor;fill:none;stroke-width:2;stro
 nav button[aria-selected="true"]{color:#fff;background:var(--grad)}
 nav .n{position:absolute;top:2px;left:calc(50% + 8px);min-width:18px;border-radius:9px;background:var(--t);color:#0E0A24;font-size:11px;padding:0 5px;font-weight:800}
 @media (prefers-reduced-motion:no-preference){.lb i{animation:pulse 1.4s ease-in-out infinite}@keyframes pulse{50%{opacity:.25}}.chk svg{transition:opacity .15s}}
+
+.form{display:flex;flex-direction:column;gap:10px}
+.form input[type=email],.form input[type=password],.form input[type=number],.form input[type=text]{width:100%}
+.form label.ck{display:flex;gap:10px;align-items:flex-start;font-size:14px;color:var(--muted)}
+.form label.ck input{width:20px;height:20px;accent-color:#7C5CFF;flex:none;margin-top:2px}
+.btn2{border:1px solid var(--line);background:var(--glass2);border-radius:999px;padding:9px 18px;cursor:pointer;font-weight:800}
+.link{background:none;border:0;color:var(--acc2);cursor:pointer;font-weight:700;padding:0;text-decoration:underline}
+.lock{display:inline-flex;align-items:center;gap:6px;font-weight:700;color:var(--acc2)}
+.reg{border:1px solid var(--line);background:var(--glass2);border-radius:999px;padding:6px 12px;cursor:pointer;font-weight:800;font-size:13px}
+.sug{color:var(--t);font-weight:800}
+.status{font-weight:800}.status.won{color:var(--pos)}.status.lost{color:var(--neg)}.status.open,.status.push{color:var(--muted)}
+dialog{border:1px solid var(--line);border-radius:24px;background:#1A1440;color:var(--ink);padding:20px;width:min(92vw,420px)}
+:root[data-theme="light"] dialog{background:#fff}
+dialog::backdrop{background:rgba(5,3,20,.6);-webkit-backdrop-filter:blur(4px);backdrop-filter:blur(4px)}
+dialog h2{font-family:var(--disp);font-size:18px;margin:0 0 4px}
+.drow{display:flex;gap:10px;justify-content:flex-end;margin-top:14px}
+#toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(96px + env(safe-area-inset-bottom,0px));background:var(--gradT);color:#0E0A24;font-weight:800;padding:10px 18px;border-radius:999px;z-index:20;display:none;max-width:90vw;text-align:center}
+.cta{border-radius:28px;padding:20px 18px;margin:0 0 16px;position:relative;overflow:hidden;background:var(--glass);border:1px solid rgba(255,255,255,.2);-webkit-backdrop-filter:blur(18px);backdrop-filter:blur(18px)}
+.cta::before{content:"";position:absolute;inset:0;background:var(--grad);opacity:.25;z-index:-1}
+.cta h2{font-family:var(--disp);font-size:20px;margin:0 0 6px}
+.cta ul{margin:8px 0 12px}
+.cta .add{width:100%;padding:13px}
+nav{max-width:480px}
+.bet{display:inline-flex;align-items:center;border-radius:999px;padding:6px 12px;font-weight:800;font-size:13px;text-decoration:none;background:var(--gradT);color:#0E0A24}
+.why{border-top:1px solid var(--line);padding:12px 0}
+.wt{font-family:var(--disp);font-weight:600;font-size:15px;margin-bottom:8px}
+.wc{display:grid;grid-template-columns:1fr 1fr;gap:10px;font-size:14px}
+.wc>div{background:var(--sunk);border-radius:14px;padding:10px}
+.wl{display:block;font-size:12px;font-weight:800;color:var(--muted);margin-bottom:4px}
+.wl.bv{color:var(--t)}
 </style>
 </head>
 <body>
@@ -160,75 +191,189 @@ nav .n{position:absolute;top:2px;left:calc(50% + 8px);min-width:18px;border-radi
  <header class="top"><div class="who"><span class="av" aria-hidden="true">BV</span><div><div class="brand">BetVision <span>(100xBajo)</span></div>
  <div class="stamp" id="stamp">Cargando datos…</div></div></div>
  <button class="round" id="themeBtn" aria-label="Cambiar entre tema oscuro y claro"><svg viewBox="0 0 24 24"><path d="M5 7h14M5 12h14M5 17h14"/></svg></button></header>
- <main id="view"><div class="panel"><p>Cargando cuotas en vivo…</p></div></main>
+ <main id="view"><div class="panel"><p>Cargando…</p></div></main>
 </div>
 <nav role="tablist">
  <button role="tab" data-tab="games" aria-selected="true"><svg viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="15" rx="2.5"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg>Partidos</button>
  <button role="tab" data-tab="parlay" aria-selected="false"><svg viewBox="0 0 24 24"><rect x="2" y="9" width="3" height="6" rx="1"/><rect x="5.5" y="6.5" width="3.5" height="11" rx="1"/><rect x="15" y="6.5" width="3.5" height="11" rx="1"/><rect x="19" y="9" width="3" height="6" rx="1"/><path d="M9 12h6"/></svg>Parlay<span class="n" id="legN">0</span></button>
+ <button role="tab" data-tab="bets" aria-selected="false"><svg viewBox="0 0 24 24"><path d="M4 19V5M4 19h16M8 15l4-4 3 3 5-6"/></svg>Apuestas</button>
+ <button role="tab" data-tab="account" aria-selected="false"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6"/></svg>Cuenta</button>
  <button role="tab" data-tab="guide" aria-selected="false"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.5"/></svg>Guía</button>
 </nav>
+<dialog id="dlg"></dialog>
+<div id="toast" role="status" aria-live="polite"></div>
 <script>
 const $=s=>document.querySelector(s);
 const ls={get(k,d){try{const v=localStorage.getItem(k);return v?JSON.parse(v):d}catch(e){return d}},set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}};
-let DATA=null,S={tab:'games',lg:'all',sort:'time',stake:10},LEGS=ls.get('bv-legs',[]);
-const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const pct=p=>(p*100).toFixed(1).replace('.0','')+'%';
 const sg=x=>(x>=0?'+':'')+(x*100).toFixed(1)+'%';
 const us=d=>d>=2?'+'+Math.round((d-1)*100):'-'+Math.round(100/(d-1));
+const money=x=>(x<0?'-$':'$')+Math.abs(x).toFixed(2);
+const dec=t=>{const x=parseFloat(String(t).replace(',','.'));if(isNaN(x))return null;if(x>=100)return 1+x/100;if(x<=-100)return 1+100/Math.abs(x);return x>1?x:null};
 const short=n=>{const w=n.split(' ');return w.length>1?w[w.length-1]:n};
 const when=iso=>{const d=new Date(iso);return d.toLocaleDateString('es',{weekday:'short',day:'numeric',month:'short'})+', '+d.toLocaleTimeString('es',{hour:'numeric',minute:'2-digit'})};
 const dayKey=iso=>new Date(iso).toLocaleDateString('es',{weekday:'long',day:'numeric',month:'long'});
 const ago=iso=>{const m=Math.round((Date.now()-new Date(iso))/60000);return m<1?'hace un momento':m<60?`hace ${m} min`:`hace ${Math.round(m/60)} h`};
-function legs(){if(!DATA)return[];return LEGS.map(k=>{const [gid,i]=k.split('|');const g=DATA.games.find(x=>x.id===gid);if(!g)return null;const o=g.outcomes[+i];return o?{k,g,o,price:o.myPrice||o.best.price}:null}).filter(Boolean)}
-async function load(){try{const r=await fetch('/api/data',{cache:'no-store'});DATA=await r.json();}catch(e){DATA={games:[],errors:['No se pudo conectar con el servidor.']}}
- LEGS=LEGS.filter(k=>DATA.games.some(g=>g.id===k.split('|')[0]));render();}
+function toast(t){const el=$('#toast');el.textContent=t;el.style.display='block';clearTimeout(toast.t);toast.t=setTimeout(()=>el.style.display='none',3500)}
+
+let CFG={},SB=null,SESSION=null,ME=null,DATA=null,BETS=null,LEGS=ls.get('bv-legs',[]);
+const S={tab:'games',lg:'all',sort:'time',stake:10,auth:'signup'};
+const premium=()=>!!(DATA&&DATA.premium);
+
+async function api(path,opt={}){const h={'Content-Type':'application/json'};if(SESSION)h.Authorization='Bearer '+SESSION.access_token;
+  const r=await fetch(path,{...opt,headers:h});const j=await r.json().catch(()=>({}));if(!r.ok)throw Object.assign(new Error(j.error||'Error'),{status:r.status});return j}
+async function loadData(){try{DATA=await api('/api/data')}catch(e){DATA={games:[],errors:['No se pudo conectar con el servidor.']}}
+  LEGS=LEGS.filter(k=>DATA.games.some(g=>g.id===k.split('|')[0]));render()}
+async function refreshAll(){ME=null;BETS=null;if(SESSION){try{ME=await api('/api/me')}catch(e){}}await loadData()}
+async function init(){
+  try{CFG=await (await fetch('/api/config')).json()}catch(e){}
+  if(CFG.supabaseUrl&&window.supabase){SB=window.supabase.createClient(CFG.supabaseUrl,CFG.supabaseAnon);
+    const {data}=await SB.auth.getSession();SESSION=data.session;
+    SB.auth.onAuthStateChange((ev,s)=>{const changed=(s&&s.access_token)!==(SESSION&&SESSION.access_token);SESSION=s;if(changed&&ev!=='TOKEN_REFRESHED')refreshAll()})}
+  const q=new URLSearchParams(location.search).get('pago');
+  await refreshAll();
+  if(q){history.replaceState(null,'','/');if(q==='ok'){toast('¡Listo! Tu prueba Premium empezó.');setTimeout(refreshAll,4000)}else toast('Pago cancelado.')}
+  setInterval(loadData,5*60*1000)}
+
+const STATES={AL:'Alabama',AK:'Alaska',AZ:'Arizona',AR:'Arkansas',CA:'California',CO:'Colorado',CT:'Connecticut',DE:'Delaware',DC:'Washington D. C.',FL:'Florida',GA:'Georgia',HI:'Hawái',ID:'Idaho',IL:'Illinois',IN:'Indiana',IA:'Iowa',KS:'Kansas',KY:'Kentucky',LA:'Luisiana',ME:'Maine',MD:'Maryland',MA:'Massachusetts',MI:'Míchigan',MN:'Minnesota',MS:'Misisipi',MO:'Misuri',MT:'Montana',NE:'Nebraska',NV:'Nevada',NH:'Nuevo Hampshire',NJ:'Nueva Jersey',NM:'Nuevo México',NY:'Nueva York',NC:'Carolina del Norte',ND:'Dakota del Norte',OH:'Ohio',OK:'Oklahoma',OR:'Oregón',PA:'Pensilvania',RI:'Rhode Island',SC:'Carolina del Sur',SD:'Dakota del Sur',TN:'Tennessee',TX:'Texas',UT:'Utah',VT:'Vermont',VA:'Virginia',WA:'Washington',WV:'Virginia Occidental',WI:'Wisconsin',WY:'Wyoming'};
+const myState=()=>(ME&&ME.state)||ls.get('bv-state','');
+const myBookKey=()=>(ME&&ME.book)||ls.get('bv-book','');
+function allBooks(){const m={};(DATA&&DATA.games||[]).forEach(g=>g.outcomes.forEach(o=>Object.entries(o.byBook||{}).forEach(([k,v])=>m[k]=v.t)));return Object.entries(m).sort((a,b)=>a[1].localeCompare(b[1]))}
+function quote(o){const bb=o.byBook||{};const k=myBookKey();if(k&&bb[k])return{key:k,title:bb[k].t,price:bb[k].pr,link:bb[k].l,mine:true};
+ let best=null;for(const [kk,v] of Object.entries(bb))if(!best||v.pr>best.price)best={key:kk,title:v.t,price:v.pr,link:v.l,mine:false};
+ return best||{key:'',title:o.best?o.best.book:'',price:o.myPrice||(o.best&&o.best.price),link:null,mine:false}}
+function goLink(q){const aff=(CFG.affiliates||[]).some(a=>a.key===q.key);if(q.link)return '/go?b='+encodeURIComponent(q.key)+'&u='+encodeURIComponent(q.link);return aff?'/go?b='+encodeURIComponent(q.key):null}
+function recBooks(){const st=myState();return (CFG.affiliates||[]).filter(a=>!a.states||!a.states.length||a.states.includes('*')||(st&&a.states.includes(st)))}
+function booksPanel(){const st=myState();const list=st?recBooks():[];const affs=CFG.affiliates||[];
+ return `<div class="panel" id="casas"><h2>Casas recomendadas</h2>
+ <div class="row"><label>Tu estado<select id="stateSel"><option value="">Elige tu estado</option>${Object.entries(STATES).map(([k,v])=>`<option value="${k}" ${st===k?'selected':''}>${v}</option>`).join('')}</select></label></div>
+ ${!st?'<p class="note">Elige tu estado para ver las casas legales donde vives.</p>':!affs.length?'<p class="note">Pronto verás aquí las casas recomendadas.</p>':!list.length?'<p class="note">Todavía no tenemos casas recomendadas para tu estado. Recuerda apostar solo en casas con licencia donde vives.</p>':
+ list.map(a=>`<div class="leg"><span><b>${esc(a.name)}</b>${a.offer?`<br><span class="note">${esc(a.offer)}</span>`:''}</span><a class="bet" href="/go?b=${encodeURIComponent(a.key)}" target="_blank" rel="noopener">Abrir cuenta ↗</a></div>`).join('')}
+ <div class="row" style="margin-top:14px"><label>Casa donde apuestas<select id="bookSel"><option value="">La de mejor cuota en cada partido</option>${allBooks().map(([k,t])=>`<option value="${k}" ${myBookKey()===k?'selected':''}>${esc(t)}</option>`).join('')}</select></label></div>
+ <p class="note">BetVision calcula el valor con la cuota de la casa que elijas. Usa solo casas con licencia en tu estado y solo si tienes 21 años o más.</p>
+ ${affs.length?'<p class="note"><b>Aviso:</b> BetVision puede recibir una comisión si abres una cuenta desde estos enlaces. Eso no cambia las probabilidades ni el valor que te mostramos.</p>':''}</div>`}
+async function savePref(k,v){ls.set(k==='state'?'bv-state':'bv-book',v);if(ME){ME[k]=v;try{await api('/api/me',{method:'PUT',body:JSON.stringify({[k]:v})})}catch(e){}}render()}
+
+function kelly(p,d){const b=d-1,f=(b*p-(1-p))/b;return f>0?Math.min(f/4,.02):0}
+function sugStake(o){if(!ME||!ME.bankroll)return null;const d=quote(o).price;const s=ME.bankroll*kelly(o.p,d);return s>0?s:null}
+function legs(){if(!DATA||!premium())return[];return LEGS.map(k=>{const [gid,i]=k.split('|');const g=DATA.games.find(x=>x.id===gid);if(!g)return null;const o=g.outcomes[+i];return o&&o.best?{k,g,o,price:quote(o).price}:null}).filter(Boolean)}
+
+/* ----- vistas ----- */
+function cta(){const t=CFG.trialDays||7;return `<section class="cta"><h2>BetVision Premium</h2><p class="note" style="margin:0">Desbloquea lo que te ayuda a decidir con datos:</p>
+ <ul><li>Valor de cada cuota y cuota justa</li><li>Parlays recomendados con cuotas en vivo</li><li>Registro de tus apuestas con valor de cierre (CLV)</li><li>Tamaño de apuesta sugerido según tu presupuesto</li></ul>
+ <button class="add" data-act="subscribe">Probar ${t} días gratis</button><p style="text-align:center;margin:10px 0 0"><button class="link" data-tab="guide">¿Por qué BetVision y no un influencer?</button></p><p class="note" style="text-align:center;margin:8px 0 0">Luego ${esc(CFG.price||'$99 al mes')}. Cancela cuando quieras. Solo mayores de 21.</p></section>`}
 function recoBlock(title,sub,r){if(!r)return'';return `<div class="rb"><div class="rd">${title}</div><p class="note" style="margin:0 0 6px">${sub}</p>
  ${r.legs.map(x=>`<div class="rl"><span><span class="ab">${esc(short(x.team))}</span>${esc(x.team)}<br><span class="note">vs ${esc(x.vs)}, ${when(x.start)}</span></span><b>${pct(x.p)}</b></div>`).join('')}
  <div class="rs"><div><span class="note">Probabilidad de ganar</span><div class="big">${pct(r.p)}</div></div><div style="text-align:right"><span class="note">Cuota combinada</span><div class="rf">${us(r.price)}</div><span class="ev ${r.ev>=0?'pos':'neg'}">Valor ${sg(r.ev)}</span></div></div>
- <button class="add" data-set="${r.legs.map(x=>{const g=DATA.games.find(y=>y.id===x.gid);return x.gid+'|'+g.outcomes.findIndex(o=>o.name===x.team)}).join(',')}">Usar este parlay</button></div>`}
+ <button class="add" data-set="${r.legs.map(x=>x.gid+'|'+x.idx).join(',')}">Usar este parlay</button></div>`}
 function reco(){const R=DATA.reco||{};if(!R.safest&&!R.value)return'';
  return `<section class="reco"><h2>Parlays recomendados <span>Cuotas en vivo</span></h2>
- ${recoBlock('Más valor','Selecciones donde la cuota paga más de lo que dice la probabilidad de consenso.',R.value)}
- ${recoBlock('Más probable','Los dos favoritos más fuertes. Gana más seguido, pero revisa si el valor sale en verde.',R.safest)}
- ${!R.value?'<p class="note">Ahora mismo no hay suficientes selecciones con valor positivo para un parlay de valor. Esperar también es una decisión.</p>':''}
+ ${recoBlock('Más valor','La cuota paga más de lo que dice la probabilidad de consenso.',R.value)}
+ ${recoBlock('Más probable','Los dos favoritos más fuertes. Gana más seguido, pero revisa el valor.',R.safest)}
+ ${!R.value?'<p class="note">Ahora mismo no hay suficientes selecciones con valor para un parlay de valor. Esperar también es una decisión.</p>':''}
  <p class="note">Probabilidad = consenso de todas las casas sin su margen. No es una garantía.</p></section>`}
 function hero(){const L=legs();const p=L.length?L.reduce((t,x)=>t*x.o.p,1):null;const ticks=Array.from({length:21},(_,i)=>`<span style="height:${i%5===0?26:13}px"></span>`).join('');
  return `<button class="hero" data-tab="parlay"><div class="hl">${L.length?'Probabilidad de tu parlay, '+L.length+(L.length===1?' selección':' selecciones'):'Tu parlay'}</div><div class="scale"><span class="sn">0</span><span class="sn">25</span><span class="big">${p==null?'0':pct(p)}</span><span class="sn">75</span><span class="sn">100</span></div><div class="ruler">${ticks}${p!=null?`<i style="left:${(p*100).toFixed(1)}%"></i>`:''}</div><div class="hint">${L.length?'Toca para ver el pago y el valor':'Toca el + de un equipo para empezar'}</div></button>`}
-function card(g){return `<div class="g"><div class="gh"><span>${esc(g.league)}, ${when(g.start)}</span><span>${g.books} casas</span></div>
- ${g.outcomes.map((o,i)=>{const k=g.id+'|'+i,on=LEGS.includes(k),ev=o.evMine??o.evBest;return `<div class="side"><span class="nm"><span class="ab">${esc(o.name==='Draw'?'EMP':short(o.name))}</span>${esc(o.name==='Draw'?'Empate':o.name)} <i>${o.name===g.home?'local':''}</i></span><span class="pc">${pct(o.p)}</span>
+function card(g){const prem=premium();return `<div class="g"><div class="gh"><span>${esc(g.league)}, ${when(g.start)}</span><span>${g.books} casas</span></div>
+ ${g.outcomes.map((o,i)=>{const k=g.id+'|'+i,on=LEGS.includes(k);const q=prem?quote(o):null;const ev=prem?o.p*q.price-1:null;const s=prem?sugStake(o):null;const gl=prem?goLink(q):null;
+ return `<div class="side"><span class="nm"><span class="ab">${esc(o.name==='Draw'?'EMP':short(o.name))}</span>${esc(o.name==='Draw'?'Empate':o.name)} <i>${o.name===g.home?'local':''}</i></span><span class="pc">${pct(o.p)}</span>
  ${i===0?`<div class="bar" style="grid-column:1/-1">${g.outcomes.map((x,j)=>`<span class="${j===0?'bh':'ba'}" style="width:${x.p*100}%"></span>`).join('')}</div>`:''}
- <div class="ctl"><span>Justa ${us(o.fair)}</span><span>${o.myPrice?'Tu casa '+us(o.myPrice):'Mejor '+us(o.best.price)+' ('+esc(o.best.book)+')'}</span><span class="ev ${ev>=0?'pos':'neg'}">Valor ${sg(ev)}</span>
- <button class="chk" data-leg="${k}" aria-pressed="${on}" aria-label="${on?'Quitar':'Añadir'} ${esc(o.name)}"><svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7"/></svg></button></div></div>`}).join('')}</div>`}
+ ${prem?`<div class="ctl"><span>Justa ${us(o.fair)}</span><span>${q.mine?'Tu casa ':'Mejor: '}${esc(q.title)} ${us(q.price)}</span><span class="ev ${ev>=0?'pos':'neg'}">Valor ${sg(ev)}</span>${s?`<span class="sug">Sugerido ${money(s)}</span>`:''}
+ ${gl?`<a class="bet" href="${gl}" target="_blank" rel="noopener">Apostar en ${esc(q.title)} ↗</a>`:''}<button class="reg" data-reg="${k}">Registrar</button><button class="chk" data-leg="${k}" aria-pressed="${on}" aria-label="${on?'Quitar':'Añadir'} ${esc(o.name)}"><svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7"/></svg></button></div>`
+ :(i===g.outcomes.length-1?`<div class="ctl"><span class="lock">🔒 Valor, cuota justa y parlays: Premium</span></div>`:'')}</div>`}).join('')}</div>`}
 function renderGames(){const lgs=[...new Set(DATA.games.map(g=>g.league))];let list=DATA.games.filter(g=>S.lg==='all'||g.league===S.lg);
- let h=`${reco()}${hero()}<div class="tiles">${['all',...lgs].map(l=>`<button class="tile" data-lg="${esc(l)}" aria-pressed="${S.lg===l}"><span class="tx"><b>${l==='all'?'Todos':esc(l)}</b><small>${DATA.games.filter(g=>l==='all'||g.league===l).length} partidos</small></span></button>`).join('')}</div>
- <div class="row"><label>Ordenar<select id="sort"><option value="time" ${S.sort==='time'?'selected':''}>Por hora</option><option value="ev" ${S.sort==='ev'?'selected':''}>Mayor valor</option><option value="prob" ${S.sort==='prob'?'selected':''}>Mayor probabilidad</option></select></label></div>`;
+ let h=(premium()?reco()+hero():cta())+`<div class="tiles">${['all',...lgs].map(l=>`<button class="tile" data-lg="${esc(l)}" aria-pressed="${S.lg===l}"><span class="tx"><b>${l==='all'?'Todos':esc(l)}</b><small>${DATA.games.filter(g=>l==='all'||g.league===l).length} partidos</small></span></button>`).join('')}</div>`;
+ if(premium())h+=`<div class="row"><label>Ordenar<select id="sort"><option value="time" ${S.sort==='time'?'selected':''}>Por hora</option><option value="ev" ${S.sort==='ev'?'selected':''}>Mayor valor</option><option value="prob" ${S.sort==='prob'?'selected':''}>Mayor probabilidad</option></select></label></div>`;
  if(!list.length)return h+'<div class="panel"><p>No hay partidos con cuotas en este momento.</p></div>';
- if(S.sort!=='time'){const rows=list.flatMap(g=>g.outcomes.map((o,i)=>({g,o,i,ev:o.evMine??o.evBest}))).sort((a,b)=>S.sort==='ev'?b.ev-a.ev:b.o.p-a.o.p).slice(0,25);
+ if(premium()&&S.sort!=='time'){const rows=list.flatMap(g=>g.outcomes.map(o=>({g,o,ev:o.p*quote(o).price-1}))).sort((a,b)=>S.sort==='ev'?b.ev-a.ev:b.o.p-a.o.p).slice(0,25);
   return h+`<div class="panel">${rows.map(r=>`<div class="leg"><span><b>${esc(r.o.name)}</b><br><span class="note">${esc(r.g.league)}, ${when(r.g.start)}</span></span><span style="text-align:right"><b>${pct(r.o.p)}</b><br><span class="ev ${r.ev>=0?'pos':'neg'}">${sg(r.ev)}</span></span></div>`).join('')}</div>`}
  let last='';list.forEach(g=>{const d=dayKey(g.start);if(d!==last){h+=`<h2 class="day">${d}</h2>`;last=d}h+=card(g)});return h}
-function renderParlay(){const L=legs();if(!L.length)return '<div class="panel"><h2>Tu parlay está vacío</h2><p>Toca el + de los equipos que quieras combinar.</p></div>';
+function renderParlay(){if(!premium())return cta();const L=legs();if(!L.length)return '<div class="panel"><h2>Tu parlay está vacío</h2><p>Toca el cuadro de los equipos que quieras combinar.</p></div>';
  const p=L.reduce((t,x)=>t*x.o.p,1),d=L.reduce((t,x)=>t*x.price,1),ev=p*d-1;
  return `<div class="panel"><h2>Tu parlay</h2>${L.map(x=>`<div class="leg"><span><b>${esc(x.o.name)}</b><br><span class="note">${esc(x.g.league)}, ${pct(x.o.p)}, ${us(x.price)}</span></span><button data-rm="${x.k}">Quitar</button></div>`).join('')}
  <div class="kpis"><div class="kpi"><div class="l">Probabilidad de acertar</div><div class="big">${pct(p)}</div></div><div class="kpi"><div class="l">Cuota combinada</div><div class="big">${us(d)}</div></div><div class="kpi"><div class="l">Cuota justa</div><div class="big">${us(1/p)}</div></div><div class="kpi"><div class="l">Valor esperado</div><div class="big">${sg(ev)}</div></div></div>
  <div class="row"><label>Apuesta<input type="number" id="stake" min="1" value="${S.stake}"></label></div>
- <p>Si aciertas cobras <b>${(S.stake*d).toFixed(2)}</b>. Si fallas pierdes <b>${S.stake}</b>. Ganancia media esperada <b class="${ev>=0?'pos':'neg'}">${(S.stake*ev).toFixed(2)}</b>.</p>
+ <p>Si aciertas cobras <b>${money(S.stake*d)}</b>. Si fallas pierdes <b>${money(S.stake)}</b>. Ganancia media esperada <b class="${ev>=0?'pos':'neg'}">${money(S.stake*ev)}</b>.</p>
  ${L.length>=4?`<div class="warn"><b>${L.length} selecciones:</b> perderás este parlay unas ${Math.round((1-p)*10)} de cada 10 veces.</div>`:''}</div>`}
-function renderGuide(){return `<div class="panel"><h2>Cómo leer BetVision</h2><ul><li><b>Probabilidad:</b> consenso de todas las casas sin su margen.</li><li><b>Valor:</b> probabilidad por cuota menos 1. Verde significa que la cuota paga más de lo justo.</li><li><b>Tu casa:</b> si aparece, el valor se calcula con su cuota; si no, con la mejor disponible.</li><li>Pocas selecciones con valor positivo rinden más que muchos favoritos juntos.</li></ul></div>
- <div class="panel"><p class="note">Juego responsable: si apostar deja de ser entretenimiento, busca ayuda. En EE. UU.: 1-800-GAMBLER. (esto es 100 pa bajo)</p></div>`}
+function renderBets(){if(!premium())return cta();
+ if(BETS===null){api('/api/bets').then(b=>{BETS=b;render()}).catch(()=>{BETS=[];render()});return '<div class="panel"><p>Cargando tus apuestas…</p></div>'}
+ if(!BETS.length)return `<div class="panel"><h2>Tus apuestas</h2><p>Aún no registras ninguna. En cada partido toca <b>Registrar</b> cuando hagas una apuesta en tu casa. BetVision guarda la cuota que tomaste, la compara con la de cierre y la califica sola al terminar el partido.</p></div>`;
+ const settled=BETS.filter(b=>b.status!=='open'),stk=settled.reduce((t,b)=>t+ +b.stake,0),pl=settled.reduce((t,b)=>t+ +(b.profit||0),0);
+ const clv=BETS.map(b=>b.odds_taken*b.closing_prob-1),avg=clv.reduce((a,c)=>a+c,0)/clv.length,beat=clv.filter(x=>x>0).length/clv.length;
+ const lab={open:'Pendiente',won:'Ganada',lost:'Perdida',push:'Empate'};
+ return `<div class="kpis"><div class="kpi"><div class="l">Ganancia (liquidadas)</div><div class="big">${money(pl)}</div></div><div class="kpi"><div class="l">ROI</div><div class="big">${stk?sg(pl/stk):'—'}</div></div>
+ <div class="kpi"><div class="l">CLV promedio</div><div class="big">${sg(avg)}</div></div><div class="kpi"><div class="l">Le ganaste al cierre</div><div class="big">${Math.round(beat*100)}%</div></div></div>
+ <p class="note">El CLV compara tu cuota con la probabilidad al cierre. Si es positivo de forma constante, estás apostando mejor que el mercado aunque a corto plazo pierdas algunas.</p>
+ <div class="panel"><h2>Historial</h2>${BETS.map(b=>{const c=b.odds_taken*b.closing_prob-1;return `<div class="leg"><span><b>${esc(b.team)}</b> <span class="note">vs ${esc(b.opponent)}</span><br><span class="note">${esc(b.league)}, ${when(b.start_time)}. ${money(+b.stake)} a ${us(+b.odds_taken)}. Cierre justo ${us(1/b.closing_prob)}, CLV <span class="${c>=0?'pos':'neg'}">${sg(c)}</span></span></span>
+ <span style="text-align:right"><span class="status ${b.status}">${lab[b.status]||b.status}</span><br>${b.status==='open'?`<button class="link" data-del="${b.id}">Borrar</button>`:`<span class="${+b.profit>=0?'pos':'neg'}">${money(+b.profit)}</span>`}</span></div>`}).join('')}</div>`}
+function renderAccount(){
+ if(!SB)return '<div class="panel"><h2>Cuenta</h2><p>Las cuentas aún no están configuradas en el servidor (faltan las variables de Supabase).</p></div>';
+ if(!SESSION){const up=S.auth==='signup';return `<div class="panel"><h2>${up?'Crea tu cuenta':'Entra a tu cuenta'}</h2><form class="form" id="authForm">
+  <input type="email" name="email" placeholder="Correo" required autocomplete="email"><input type="password" name="password" placeholder="Contraseña (mínimo 6)" minlength="6" required autocomplete="${up?'new-password':'current-password'}">
+  ${up?`<label class="ck"><input type="checkbox" name="age" required>Confirmo que tengo 21 años o más.</label><label class="ck"><input type="checkbox" name="terms" required>Entiendo que BetVision ofrece análisis informativos, no garantiza ganancias y no es una casa de apuestas.</label>`:''}
+  <button class="add" type="submit">${up?'Crear cuenta':'Entrar'}</button></form>
+  <p class="note">${up?'¿Ya tienes cuenta? <button class="link" data-auth="login">Entra aquí</button>':'¿No tienes cuenta? <button class="link" data-auth="signup">Créala aquí</button>. <button class="link" data-act="reset">Olvidé mi contraseña</button>'}</p></div>`}
+ const st={active:'Premium activo',trialing:'Prueba Premium activa',past_due:'Pago pendiente',canceled:'Cancelada',none:'Plan gratis'};
+ return `<div class="panel"><h2>Tu cuenta</h2><p>${esc(ME?ME.email:'')}</p><p><b>${st[ME&&ME.sub_status]||'Plan gratis'}</b>${ME&&ME.period_end&&premium()?`<br><span class="note">${ME.sub_status==='trialing'?'La prueba termina':'Se renueva'} el ${new Date(ME.period_end).toLocaleDateString('es',{day:'numeric',month:'long'})}</span>`:''}</p>
+ ${premium()?'<button class="btn2" data-act="portal">Administrar o cancelar suscripción</button>':`<button class="add" data-act="subscribe">Probar ${CFG.trialDays||7} días gratis</button>`}</div>
+ ${premium()?`<div class="panel"><h2>Tu presupuesto</h2><p class="note">El dinero que apartas solo para apostar. BetVision sugiere apostar una fracción pequeña cuando hay valor (máximo 2 % por apuesta).</p><div class="row"><label>Presupuesto ($)<input type="number" id="bankroll" min="0" value="${ME?ME.bankroll:0}"></label></div><button class="btn2" data-act="bankroll">Guardar</button></div>`:''}
+ ${booksPanel()}
+ <div class="panel"><button class="btn2" data-act="logout">Cerrar sesión</button></div>`}
+
+function whyPanel(){const r=(t,a,b)=>`<div class="why"><div class="wt">${t}</div><div class="wc"><div><span class="wl">Influencer</span>${a}</div><div><span class="wl bv">BetVision</span>${b}</div></div></div>`;
+ return `<div class="panel" id="por-que"><h2>¿Por qué BetVision y no un influencer?</h2><p>Un influencer te da su opinión. BetVision te da los números para que decidas tú.</p>
+ ${r('Su récord','Muchos solo publican sus aciertos. Sus pérdidas son difíciles de comprobar.','Cada apuesta que registras queda guardada con su cuota y su resultado. Tu historial lo ves tú, completo.')}
+ ${r('El método','Opinión, intuición o el análisis de una sola persona.','Compara las cuotas de todas las casas, les quita su margen y calcula la probabilidad de consenso de todo el mercado.')}
+ ${r('La cuota','Cuando ves su pick, miles ya lo siguieron y la cuota empeoró.','Te muestra en ese momento la mejor cuota disponible y si todavía tiene valor.')}
+ ${r('Cómo gana dinero','Muchos cobran comisión de las casas por cada seguidor que se registra, y rara vez lo dicen.',(CFG.affiliates||[]).length?'Cobra una suscripción y puede recibir comisión si abres cuenta desde sus enlaces. Te lo dice claramente, y eso nunca cambia las probabilidades ni el valor que te muestra.':'Cobra una suscripción fija. No gana nada cuando tú pierdes.')}
+ ${r('Cuánto apostar','Te dice qué jugar, pero rara vez cuánto según tu presupuesto.','Te sugiere un monto pequeño según tu presupuesto, nunca más del 2 % por apuesta.')}
+ ${r('Cómo sabes si funciona','Esperas a ver si gana o pierde.','El CLV te dice si estás apostando mejor que el mercado, incluso antes de ver resultados.')}
+ <p class="note">Ninguna persona ni herramienta garantiza ganancias. La diferencia es que con BetVision puedes comprobarlo todo.</p></div>`}
+
+function renderGuide(){return whyPanel()+(SESSION?'':booksPanel())+`<div class="panel"><h2>Cómo leer BetVision</h2><ul><li><b>Probabilidad:</b> consenso de todas las casas sin su margen.</li><li><b>Valor:</b> probabilidad por cuota menos 1. Verde significa que la cuota paga más de lo justo.</li><li><b>CLV:</b> si tu cuota es mejor que la de cierre de forma constante, vas por buen camino.</li><li>Pocas selecciones con valor rinden más que muchos favoritos juntos.</li></ul></div>
+ <div class="panel"><p class="note">BetVision ofrece análisis informativos. No es una casa de apuestas, no acepta apuestas y no garantiza ganancias. Solo para mayores de 21 años y donde las apuestas deportivas sean legales.</p><p class="note">Juego responsable: si apostar deja de ser entretenimiento, busca ayuda. En EE. UU.: 1-800-GAMBLER. (esto es 100 pa bajo)</p></div>`}
 function render(){if(!DATA)return;$('#stamp').textContent=DATA.updated?'Actualizado '+ago(DATA.updated):'Cargando datos…';
  const err=(DATA.errors||[]).length?`<div class="warn"><b>Aviso:</b> ${DATA.errors.map(esc).join('<br>')}</div>`:'';
- const mb=DATA.games.length&&!DATA.games.some(g=>g.hasMyBook)?`<div class="info">Tu casa (${esc(DATA.myBook)}) no aparece en los datos: el valor se calcula con la mejor cuota disponible.</div>`:'';
- $('#view').innerHTML=err+mb+(S.tab==='games'?renderGames():S.tab==='parlay'?renderParlay():renderGuide());
- document.querySelectorAll('nav button').forEach(b=>b.setAttribute('aria-selected',b.dataset.tab===S.tab));$('#legN').textContent=LEGS.length;}
-document.addEventListener('click',e=>{const t=e.target.closest('[data-tab],[data-lg],[data-leg],[data-rm],[data-set]');if(!t)return;
- if(t.dataset.tab){S.tab=t.dataset.tab;window.scrollTo(0,0)}else if(t.dataset.lg)S.lg=t.dataset.lg;
+ const V={games:renderGames,parlay:renderParlay,bets:renderBets,account:renderAccount,guide:renderGuide};
+ $('#view').innerHTML=(S.tab==='games'?err:'')+V[S.tab]();
+ document.querySelectorAll('nav button').forEach(b=>b.setAttribute('aria-selected',b.dataset.tab===S.tab));$('#legN').textContent=legs().length}
+
+/* ----- acciones ----- */
+async function act(a){try{
+ if(a==='subscribe'){if(!SESSION){S.tab='account';S.auth='signup';render();toast('Crea tu cuenta para empezar la prueba.');return}const r=await api('/api/checkout',{method:'POST'});location.href=r.url}
+ else if(a==='portal'){const r=await api('/api/portal',{method:'POST'});location.href=r.url}
+ else if(a==='bankroll'){const v=+$('#bankroll').value||0;ME=await api('/api/me',{method:'PUT',body:JSON.stringify({bankroll:v})}).then(r=>({...ME,...r}));toast('Presupuesto guardado.');render()}
+ else if(a==='logout'){await SB.auth.signOut();SESSION=null;await refreshAll()}
+ else if(a==='reset'){const em=prompt('Escribe tu correo');if(em){await SB.auth.resetPasswordForEmail(em,{redirectTo:location.origin});toast('Te enviamos un correo para cambiar la contraseña.')}}
+ }catch(e){toast(e.message||'Algo salió mal')}}
+function openReg(k){const [gid,i]=k.split('|');const g=DATA.games.find(x=>x.id===gid),o=g.outcomes[+i];const price=quote(o).price;const s=sugStake(o);
+ const d=$('#dlg');d.innerHTML=`<form method="dialog" class="form" id="regForm"><h2>Registrar apuesta</h2><p class="note" style="margin:0">${esc(o.name)} vs ${esc(o.name===g.home?g.away:g.home)}, ${when(g.start)}</p>
+ <label class="note">Cuota que tomaste (americana)<input type="text" name="odds" inputmode="numeric" value="${us(price)}" required></label>
+ <label class="note">Cuánto apostaste ($)<input type="number" name="stake" min="1" step="0.01" value="${s?s.toFixed(2):10}" required></label>
+ <div class="drow"><button class="btn2" value="cancel" formnovalidate>Cancelar</button><button class="add" value="ok">Guardar</button></div></form>`;
+ d.dataset.k=k;d.showModal()}
+document.addEventListener('submit',async e=>{
+ if(e.target.id==='authForm'){e.preventDefault();const f=new FormData(e.target),email=f.get('email'),password=f.get('password');
+  try{if(S.auth==='signup'){const {error}=await SB.auth.signUp({email,password,options:{data:{age_21_confirmed:true,terms_accepted_at:new Date().toISOString()},emailRedirectTo:location.origin}});if(error)throw error;toast('Revisa tu correo para confirmar la cuenta.');S.auth='login';render()}
+   else{const {error}=await SB.auth.signInWithPassword({email,password});if(error)throw error;toast('¡Bienvenido!')}}catch(err){toast(err.message==='Invalid login credentials'?'Correo o contraseña incorrectos.':err.message)}}
+ if(e.target.id==='regForm'&&e.submitter&&e.submitter.value==='ok'){e.preventDefault();const f=new FormData(e.target),odds=dec(f.get('odds')),stake=+f.get('stake');const [gid,i]=$('#dlg').dataset.k.split('|');
+  if(!odds){toast('Escribe la cuota como -150 o +130.');return}
+  try{await api('/api/bets',{method:'POST',body:JSON.stringify({gid,idx:+i,odds,stake})});$('#dlg').close();BETS=null;toast('Apuesta registrada.')}catch(err){toast(err.message)}}});
+document.addEventListener('click',e=>{const t=e.target.closest('[data-tab],[data-lg],[data-leg],[data-rm],[data-set],[data-act],[data-auth],[data-reg],[data-del]');if(!t)return;
+ if(t.dataset.act)return act(t.dataset.act);
+ if(t.dataset.reg)return openReg(t.dataset.reg);
+ if(t.dataset.del){if(confirm('¿Borrar esta apuesta?'))api('/api/bets?id='+t.dataset.del,{method:'DELETE'}).then(()=>{BETS=null;render()});return}
+ if(t.dataset.auth){S.auth=t.dataset.auth}
+ else if(t.dataset.tab){S.tab=t.dataset.tab;window.scrollTo(0,0)}else if(t.dataset.lg)S.lg=t.dataset.lg;
  else if(t.dataset.leg){const k=t.dataset.leg,gid=k.split('|')[0];LEGS=LEGS.includes(k)?LEGS.filter(x=>x!==k):[...LEGS.filter(x=>x.split('|')[0]!==gid),k]}
  else if(t.dataset.rm)LEGS=LEGS.filter(x=>x!==t.dataset.rm);else if(t.dataset.set)LEGS=t.dataset.set.split(',');
  ls.set('bv-legs',LEGS);const y=window.scrollY;render();if(!t.dataset.tab)window.scrollTo(0,y)});
-document.addEventListener('change',e=>{if(e.target.id==='sort'){S.sort=e.target.value;render()}if(e.target.id==='stake'){S.stake=Math.max(1,+e.target.value||1);render()}});
+document.addEventListener('change',e=>{if(e.target.id==='stateSel')return savePref('state',e.target.value);if(e.target.id==='bookSel')return savePref('book',e.target.value);if(e.target.id==='sort'){S.sort=e.target.value;render()}if(e.target.id==='stake'){S.stake=Math.max(1,+e.target.value||1);render()}});
 const TH=ls.get('bv-theme',null);if(TH)document.documentElement.dataset.theme=TH;
 $('#themeBtn').addEventListener('click',()=>{const c=document.documentElement.dataset.theme==='light'?'dark':'light';document.documentElement.dataset.theme=c;ls.set('bv-theme',c)});
-load();setInterval(load,5*60*1000);
+init();
+
 </script>
 </body>
 </html>
