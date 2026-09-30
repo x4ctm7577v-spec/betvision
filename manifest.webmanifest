@@ -3,8 +3,8 @@
   "short_name": "BetVision",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#0E0A24",
-  "theme_color": "#0E0A24",
+  "background_color": "#14161B",
+  "theme_color": "#14161B",
   "lang": "es",
   "icons": [
     { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" },

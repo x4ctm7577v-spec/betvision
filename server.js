@@ -202,7 +202,14 @@ async function loadMlbContext() {
 }
 // Probabilidad BetVision: el consenso de las casas ajustado por contexto (máximo ±5 puntos)
 function applyContext(g) {
-  const adjOf = name => Math.min(0.05, (g.ctx ? g.ctx.flags : []).filter(f => f.plus && f.team === name).reduce((t, f) => t + f.adj, 0));
+  // Motivación (ya existía) + pitcheo. Los pesos son pequeños a propósito: el mercado ya descuenta
+  // buena parte del pitcheo, y se ajustarán con los resultados del Récord.
+  const TILT = { sp: 0.015, bp: 0.01, full: 0.005, closer: -0.015 };
+  const adjOf = name => {
+    const fl = (g.ctx ? g.ctx.flags : []).filter(f => f.team === name);
+    const a = fl.filter(f => f.plus).reduce((t, f) => t + f.adj, 0) + fl.reduce((t, f) => t + (TILT[f.tag] || 0), 0);
+    return Math.max(-0.05, Math.min(0.05, a));
+  };
   const two = g.outcomes.length === 2;
   for (const o of g.outcomes) {
     let a = adjOf(o.name);
@@ -212,6 +219,33 @@ function applyContext(g) {
     const price = o.myPrice || o.best.price;
     o.evBV = o.pBV * price - 1;
   }
+  g.pick = selectFor(g);
+}
+// Selección por partido: analiza a los dos equipos y elige el de mejor escenario (puede ser el underdog)
+function selectFor(g) {
+  if (g.outcomes.length !== 2) return null;
+  const c = g.ctx, fl = c && !c.locked ? c.flags : [];
+  const sides = g.outcomes.map((o, idx) => {
+    const price = o.myPrice || o.best.price, pM = o.pBV != null ? o.pBV : o.p, pImpl = 1 / price;
+    const mine = fl.filter(f => f.team === o.name);
+    const pro = mine.filter(f => !f.risk).map(f => f.text), con = mine.filter(f => f.risk).map(f => f.text);
+    if (o.name === g.home) pro.push('Juega en casa.');
+    return { idx, team: o.name, pM, pMarket: o.p, pImpl, edge: pM - pImpl, ev: pM * price - 1, price, book: o.myPrice ? o.myBook : o.best.book, pro, con };
+  });
+  const unc = [];
+  if (g.sport === 'baseball_mlb') {
+    if (!c || c.locked) unc.push('Sin datos del partido (abridores, bullpen).');
+    else { for (const x of [c.home, c.away]) if (!x.pitcher) unc.push(`${x.team} no ha anunciado abridor.`); }
+  }
+  if (g.books < 4) unc.push(`Solo ${g.books} casas con cuota: el consenso es menos confiable.`);
+  if (new Date(g.start).getTime() - Date.now() > 30 * 3600e3) unc.push('Falta más de un día: la cuota y las alineaciones pueden cambiar.');
+  const byEv = [...sides].sort((a, b) => b.ev - a.ev)[0];
+  const byP = [...sides].sort((a, b) => b.pM - a.pM)[0];
+  let sel, state;
+  if (byEv.ev > 0) { sel = byEv; if (byEv.con.length) unc.push(`${byEv.team} tiene un riesgo: ${byEv.con[0]}`); if (byEv.ev < 0.02) unc.push('La ventaja sobre el precio es muy pequeña (menos de 2 %).'); state = !unc.length ? 'verde' : 'amarillo'; }
+  else { sel = byP; state = 'blanco'; }
+  const other = sides.find(x => x !== sel);
+  return { state, team: sel.team, idx: sel.idx, underdog: sel.pMarket < other.pMarket, pM: sel.pM, pMarket: sel.pMarket, pImpl: sel.pImpl, edge: sel.edge, ev: sel.ev, price: sel.price, book: sel.book, uncertainty: unc.length ? 'alta' : 'baja', unc, sides };
 }
 function mlbContextFor(g) {
   if (g.sport !== 'baseball_mlb' || (!Object.keys(mlbCtx.teams).length && !mlbCtx.games.length)) return null;
@@ -298,6 +332,10 @@ async function recordPicks(games, reco) {
       const price = o.myPrice || o.best.price, pb = o.pBV != null ? o.pBV : o.p, ev = pb * price - 1;
       if (ev >= PICK_MIN_EV && pb >= 0.25) rows.push({ game_id: g.id, sport_key: g.sport, league: g.league, start_time: g.start, team: o.name, opponent: o.name === g.home ? g.away : g.home, kind: 'valor', prob: pb, odds: price, book: o.myPrice ? o.myBook : o.best.book, ev, closing_prob: o.p });
     }
+  }
+  for (const g of games) {
+    const k = g.pick; if (!k || k.state === 'blanco' || new Date(g.start).getTime() <= now) continue;
+    rows.push({ game_id: g.id, sport_key: g.sport, league: g.league, start_time: g.start, team: k.team, opponent: k.team === g.home ? g.away : g.home, kind: k.state === 'verde' ? 'sel_verde' : 'sel_amarillo', prob: k.pM, odds: k.price, book: k.book, ev: k.ev, closing_prob: k.pMarket });
   }
   for (const c of reco.rebote || []) {
     const g = games.find(x => x.id === c.gid); if (!g || new Date(g.start).getTime() <= now) continue;
@@ -407,7 +445,7 @@ async function syncSubscription(sub) {
 }
 function publicData(full) {
   // Versión gratis: partidos y probabilidades; sin valor, cuotas justas ni parlays.
-  return { ...full, premium: false, reco: null, games: full.games.map(g => ({ ...g, ctx: g.ctx ? { locked: true } : null, outcomes: g.outcomes.map(o => ({ name: o.name, p: o.p })) })) };
+  return { ...full, premium: false, reco: null, games: full.games.map(g => ({ ...g, pick: null, ctx: g.ctx ? { locked: true } : null, outcomes: g.outcomes.map(o => ({ name: o.name, p: o.p })) })) };
 }
 
 
@@ -427,6 +465,7 @@ function dataForAI() {
     liga: g.league,
     hora_et: new Date(g.start).toLocaleString('es', { timeZone: 'America/New_York', weekday: 'short', hour: 'numeric', minute: '2-digit' }),
     local: g.home, visita: g.away,
+    seleccion_betvision: g.pick ? { estado: ({ verde: 'Recomendación', amarillo: 'Recomendación con incertidumbre alta', blanco: 'Sin ventaja estadística clara' })[g.pick.state], equipo: g.pick.team, underdog: g.pick.underdog, prob_modelo: +(g.pick.pM * 100).toFixed(1), prob_del_precio: +(g.pick.pImpl * 100).toFixed(1), incertidumbre: g.pick.unc } : null,
     selecciones: g.outcomes.map(o => ({ equipo: o.name, prob_casas: +(o.p * 100).toFixed(1), prob_betvision: +((o.pBV != null ? o.pBV : o.p) * 100).toFixed(1), cuota: usOdds(o.myPrice || o.best.price), casa: o.myPrice ? o.myBook : o.best.book, valor_pct: +(((o.pBV != null ? o.pBV : o.p) * (o.myPrice || o.best.price) - 1) * 100).toFixed(1) })),
     contexto: g.ctx ? { tipo: g.ctx.series || null, serie: g.ctx.serie, local: g.ctx.home, visita: g.ctx.away, juegos_recientes_entre_ellos: g.ctx.h2h, alertas: g.ctx.flags.map(f => f.text) } : 'sin datos de contexto'
   }));
@@ -455,6 +494,7 @@ REGLAS FIJAS:
 - Si un rival ya clasificó y puede descansar, recomienda confirmar la alineación.
 - Si el cerrador de un equipo está cansado, súbele el riesgo a esa pata, sobre todo en juegos cerrados.
 - Al usuario le gusta la estrategia "Rebote": equipos que perdieron su último juego (sobre todo si juegan por su vida en playoffs), combinados con alguna cuota que pague bien y pocas patas (2 o 3). Señala qué equipos están en rebote, pero dile con honestidad que perder ayer, por sí solo, no está comprobado como ventaja y que las casas ya lo meten en la cuota; lo que decide es el pitcheo y el precio.
+- Cada partido trae "seleccion_betvision" (🟢 Recomendación, 🟡 con incertidumbre alta, ⚪ sin ventaja clara). Úsala y explica la diferencia entre "creo que puede ganar" y "es buena apuesta": probabilidad del modelo contra la probabilidad que implica el precio. Si es ⚪, dilo sin forzar certeza.
 - Termina siempre con "🧠 Recomendación BetVision": tu jugada final basada en TODO (pitcheo completo, valor, contexto, rebote), en 2 o 3 patas como máximo, con probabilidad aproximada del parlay, cuánto cobra con $20 y cuál es la pata más débil. Si es con bonus bet, recuerda que el bonus no se devuelve: solo se cobra la ganancia.
 - Sugiere montos pequeños: 1 % o 2 % del presupuesto.
 - Escribe para el teléfono: párrafos cortos y emojis solo para el riesgo. Máximo unas 350 palabras.
