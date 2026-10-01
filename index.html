@@ -250,6 +250,11 @@ nav button[aria-selected="true"]::before{background:var(--gold)}
 nav .n{background:var(--gold);color:#14161B}
 .askfab{border-radius:999px;background:var(--gold);color:#14161B;border-color:var(--gold)}
 .lb{background:var(--gold-soft);color:var(--gold)}
+
+.chips2{display:flex;flex-wrap:wrap;gap:6px;padding:10px 12px 2px}
+.chips2::-webkit-scrollbar{display:none}
+.chip{flex:none;font-size:12px;font-weight:500;padding:3px 9px;border-radius:999px;background:var(--s2);border:1px solid var(--line);color:var(--ink);white-space:nowrap}
+.chip.r{background:var(--warnbg);border-color:transparent;color:var(--warnt)}
 </style>
 </head>
 <body>
@@ -383,7 +388,10 @@ function pickBlock(g){const k=g.pick;if(!k)return'';
  ${k.unc.length?`<p class="note">${k.unc.map(t=>'⚠️ '+esc(t)).join('<br>')}</p>`:''}
  <p class="note" style="margin:6px 0 0"><b>Factores:</b></p>${k.sides.map(fac).join('')}
  <p class="note" style="margin-top:8px">"Puede ganar" no es lo mismo que "buena apuesta": solo vale la pena cuando nuestro modelo está por encima de lo que dice el precio.</p></details>`}
-function cardBase(g){const prem=premium();return `<div class="g"><div class="gh"><span>${esc(g.league)}, ${when(g.start)}</span><span>${g.books} casas</span></div>
+function chipsOf(g){const C=g.ctx&&!g.ctx.locked?(g.ctx.flags||[]).filter(f=>f.chip):[];const wx=g.ctx&&g.ctx.wx;
+ if(wx&&!C.some(f=>f.tag==='lluvia'))C.push({chip:`☀️ ${wx.temp}°F, lluvia ${wx.rain} %`});
+ return C.length?`<div class="chips2" aria-label="Claves del partido">${C.slice(0,8).map(f=>`<span class="chip${f.risk?' r':''}">${esc(f.chip)}</span>`).join('')}</div>`:''}
+function cardBase(g){const prem=premium();return `<div class="g"><div class="gh"><span>${esc(g.league)}, ${when(g.start)}</span><span>${g.books} casas</span></div>${prem?chipsOf(g):''}
  ${g.outcomes.map((o,i)=>{const k=g.id+'|'+i,on=LEGS.includes(k);const q=prem?quote(o):null;const pb=prem&&o.pBV!=null?o.pBV:o.p;const ev=prem?pb*q.price-1:null;const s=prem?sugStake(o):null;const gl=prem?goLink(q):null;
  return `<div class="side"><span class="nm"><span class="ab">${esc(o.name==='Draw'?'EMP':short(o.name))}</span>${esc(o.name==='Draw'?'Empate':o.name)} <i>${o.name===g.home?'local':''}</i></span><span class="pc">${pct(prem&&o.pBV!=null?o.pBV:o.p)}<small>prob.</small></span>${prem?`<button class="odds" data-leg="${k}" aria-pressed="${on}" aria-label="${on?'Quitar':'Añadir'} ${esc(o.name)} al parlay, cuota ${us(q.price)}"><small>${esc(q.title)}</small>${us(q.price)}</button>`:''}${prem&&o.adj&&Math.abs(o.adj)>=.005?`<span class="note" style="grid-column:1/-1">Casas ${pct(o.p)}, BetVision ${pct(o.pBV)} <span class="${o.adj>0?'pos':'neg'}">(${o.adj>0?'+':''}${(o.adj*100).toFixed(1)} por contexto)</span></span>`:''}
  ${i===0?`<div class="bar" style="grid-column:1/-1">${g.outcomes.map((x,j)=>`<span class="${j===0?'bh':'ba'}" style="width:${x.p*100}%"></span>`).join('')}</div>`:''}

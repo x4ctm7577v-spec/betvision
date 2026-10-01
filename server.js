@@ -81,7 +81,7 @@ function recommend(games) {
   const up = games.filter(g => new Date(g.start).getTime() > now && g.outcomes.length === 2);
   const pick = list => { const seen = new Set(), out = []; for (const c of list) { if (seen.has(c.gid)) continue; seen.add(c.gid); out.push(c); if (out.length === 3) break; } return out; };
   const cands = up.flatMap(g => g.outcomes.map((o, i) => {
-    const fl = g.ctx ? g.ctx.flags.filter(f => f.team === o.name) : [];
+    const fl = g.ctx ? g.ctx.flags.filter(f => f.team === o.name || (f.team == null && f.risk)) : [];
     const pb = o.pBV != null ? o.pBV : o.p, price = o.myPrice || o.best.price;
     return { gid: g.id, idx: i, league: g.league, start: g.start, team: o.name, vs: o.name === g.home ? g.away : g.home, p: pb, pc: o.p, price, ev: pb * price - 1, risk: fl.filter(f => f.risk).map(f => f.text), notes: fl.filter(f => !f.risk).map(f => f.text), bestPrice: o.best.price, bestBook: o.best.book, plus: fl.some(f => f.plus), tags: fl.map(f => f.tag).filter(Boolean) };
   }));
@@ -131,25 +131,27 @@ async function loadMlbContext() {
   try {
     const st = await getJson(`https://statsapi.mlb.com/api/v1/standings?leagueId=103,104&season=${season}&standingsTypes=regularSeason`);
     for (const rec of st.records || []) for (const t of rec.teamRecords || []) {
-      const l10 = ((t.records && t.records.splitRecords) || []).find(x => x.type === 'lastTen');
+      const sr = (t.records && t.records.splitRecords) || [];
+      const l10 = sr.find(x => x.type === 'lastTen'), hm = sr.find(x => x.type === 'home'), aw = sr.find(x => x.type === 'away');
       teams[tk(t.team.name)] = {
         name: t.team.name, w: t.wins, l: t.losses, streak: t.streak ? t.streak.streakCode : null,
         l10: l10 ? `${l10.wins}-${l10.losses}` : null, clinched: !!t.clinched,
         elim: !t.clinched && t.eliminationNumber === 'E' && t.wildCardEliminationNumber === 'E',
-        left: 162 - (t.wins + t.losses)
+        left: 162 - (t.wins + t.losses),
+        homeRec: hm ? [hm.wins, hm.losses] : null, awayRec: aw ? [aw.wins, aw.losses] : null
       };
     }
   } catch (e) { console.error('Contexto MLB (posiciones):', e.message); }
   try {
     const d = x => new Date(x).toISOString().slice(0, 10);
-    const sc = await getJson(`https://statsapi.mlb.com/api/v1/schedule?sportId=1&startDate=${d(Date.now() - 7 * 864e5)}&endDate=${d(Date.now() + 3 * 864e5)}&hydrate=probablePitcher,seriesStatus`);
+    const sc = await getJson(`https://statsapi.mlb.com/api/v1/schedule?sportId=1&startDate=${d(Date.now() - 7 * 864e5)}&endDate=${d(Date.now() + 3 * 864e5)}&hydrate=probablePitcher,seriesStatus,venue(location,fieldInfo)`);
     for (const day of sc.dates || []) for (const g of day.games || []) {
       const hp = g.teams.home.probablePitcher, ap = g.teams.away.probablePitcher;
       if (hp) pids.add(hp.id); if (ap) pids.add(ap.id);
       const ss = g.seriesStatus || {};
       const final = g.status && (g.status.abstractGameState === 'Final' || /final|completed/i.test(g.status.detailedState || ''));
       games.push({ date: g.gameDate, type: g.gameType, series: g.seriesDescription || '', seriesState: ss.result || ss.description || null, gameNo: g.seriesGameNumber || null, ofGames: g.gamesInSeries || null,
-        final: !!final, hs: g.teams.home.score, as: g.teams.away.score,
+        final: !!final, hs: g.teams.home.score, as: g.teams.away.score, venue: g.venue ? { name: g.venue.name, lat: g.venue.location && g.venue.location.defaultCoordinates && g.venue.location.defaultCoordinates.latitude, lon: g.venue.location && g.venue.location.defaultCoordinates && g.venue.location.defaultCoordinates.longitude, roof: g.venue.fieldInfo && g.venue.fieldInfo.roofType } : null,
         home: g.teams.home.team.name, away: g.teams.away.team.name, hid: g.teams.home.team.id, aid: g.teams.away.team.id, hp: hp ? { id: hp.id, name: hp.fullName } : null, ap: ap ? { id: ap.id, name: ap.fullName } : null });
     }
   } catch (e) { console.error('Contexto MLB (calendario):', e.message); }
@@ -198,6 +200,16 @@ async function loadMlbContext() {
     } catch (e) { /* sin dato de cerrador */ }
     if (Object.keys(pen).length) pens[id] = pen;
   }
+  for (const g of soon) {
+    const v = g.venue, t = new Date(g.date).getTime();
+    if (!v || v.lat == null || /dome|retractable/i.test(v.roof || '') || t - Date.now() > 48 * 3600e3) continue;
+    try {
+      const w = await getJson(`https://api.open-meteo.com/v1/forecast?latitude=${v.lat}&longitude=${v.lon}&hourly=precipitation_probability,temperature_2m,wind_speed_10m&temperature_unit=fahrenheit&wind_speed_unit=mph&timezone=UTC&forecast_days=3`);
+      const H = w.hourly || {}, hour = new Date(Math.round(t / 3600e3) * 3600e3).toISOString().slice(0, 13) + ':00';
+      const i = (H.time || []).indexOf(hour);
+      if (i >= 0) g.wx = { rain: H.precipitation_probability[i], temp: Math.round(H.temperature_2m[i]), wind: Math.round(H.wind_speed_10m[i]), venue: v.name };
+    } catch (e) { /* sin clima */ }
+  }
   if (Object.keys(teams).length || games.length) mlbCtx = { at: Date.now(), teams, games, pens };
 }
 // Probabilidad BetVision: el consenso de las casas ajustado por contexto (máximo ±5 puntos)
@@ -227,7 +239,7 @@ function selectFor(g) {
   const c = g.ctx, fl = c && !c.locked ? c.flags : [];
   const sides = g.outcomes.map((o, idx) => {
     const price = o.myPrice || o.best.price, pM = o.pBV != null ? o.pBV : o.p, pImpl = 1 / price;
-    const mine = fl.filter(f => f.team === o.name);
+    const mine = fl.filter(f => f.team === o.name || (f.team == null && f.risk));
     const pro = mine.filter(f => !f.risk).map(f => f.text), con = mine.filter(f => f.risk).map(f => f.text);
     if (o.name === g.home) pro.push('Juega en casa.');
     return { idx, team: o.name, pM, pMarket: o.p, pImpl, edge: pM - pImpl, ev: pM * price - 1, price, book: o.myPrice ? o.myBook : o.best.book, pro, con };
@@ -247,12 +259,13 @@ function selectFor(g) {
   const other = sides.find(x => x !== sel);
   return { state, team: sel.team, idx: sel.idx, underdog: sel.pMarket < other.pMarket, pM: sel.pM, pMarket: sel.pMarket, pImpl: sel.pImpl, edge: sel.edge, ev: sel.ev, price: sel.price, book: sel.book, uncertainty: unc.length ? 'alta' : 'baja', unc, sides };
 }
+const nick = n => /Sox$|Jays$/.test(n) ? n.split(' ').slice(-2).join(' ') : n.split(' ').pop();
 function mlbContextFor(g) {
   if (g.sport !== 'baseball_mlb' || (!Object.keys(mlbCtx.teams).length && !mlbCtx.games.length)) return null;
   const t0 = new Date(g.start).getTime();
   const mg = mlbCtx.games.find(x => tk(x.home) === tk(g.home) && tk(x.away) === tk(g.away) && Math.abs(new Date(x.date) - t0) < 6 * 3600e3);
   const post = mg ? !['R', 'S', 'E', 'A'].includes(mg.type) : false;
-  const side = (name, p) => { const t = mlbCtx.teams[tk(name)]; return { team: name, record: t ? `${t.w}-${t.l}` : null, l10: t ? t.l10 : null, streak: t ? t.streak : null, clinched: t ? t.clinched : false, elim: t ? t.elim : false, left: t ? t.left : null, pitcher: p || null }; };
+  const side = (name, p) => { const t = mlbCtx.teams[tk(name)]; return { homeRec: t ? t.homeRec : null, awayRec: t ? t.awayRec : null, team: name, record: t ? `${t.w}-${t.l}` : null, l10: t ? t.l10 : null, streak: t ? t.streak : null, clinched: t ? t.clinched : false, elim: t ? t.elim : false, left: t ? t.left : null, pitcher: p || null }; };
   const H = side(g.home, mg && mg.hp), A = side(g.away, mg && mg.ap), flags = [];
   const pens = mlbCtx.pens || {};
   if (mg) { H.bullpen = pens[mg.hid] || null; A.bullpen = pens[mg.aid] || null; }
@@ -265,20 +278,34 @@ function mlbContextFor(g) {
     const m = /^([WL])(\d+)$/.exec(x.streak || '');
     if (m && +m[2] >= 3) flags.push({ team: x.team, risk: false, text: `${x.team} lleva ${m[2]} ${m[1] === 'W' ? 'victorias' : 'derrotas'} seguidas. Ojo: las rachas no predicen el próximo juego.` });
   }
+  // De local / de visitante
+  const pctRec = r => r && r[0] + r[1] >= 20 ? r[0] / (r[0] + r[1]) : null;
+  const ah = pctRec(H.homeRec), aa = pctRec(A.awayRec);
+  if (ah != null && ah >= 0.6) flags.push({ team: H.team, risk: false, tag: 'casa', chip: `🏠 ${nick(H.team)} fuerte en casa`, text: `${H.team} es fuerte en casa: ${H.homeRec[0]}-${H.homeRec[1]}.` });
+  if (aa != null && aa <= 0.42) flags.push({ team: A.team, risk: false, tag: 'visita', chip: `✈️ ${nick(A.team)} flojo de visitante`, text: `${A.team} sufre de visitante: ${A.awayRec[0]}-${A.awayRec[1]}.` });
+  if (aa != null && aa >= 0.58) flags.push({ team: A.team, risk: false, tag: 'visita', chip: `✈️ ${nick(A.team)} gana de visitante`, text: `${A.team} juega bien de visitante: ${A.awayRec[0]}-${A.awayRec[1]}.` });
+  // Clima
+  const wx = mg && mg.wx;
+  if (wx) {
+    if (wx.rain >= 50) flags.push({ team: null, risk: true, tag: 'lluvia', chip: `🌧️ Lluvia ${wx.rain} %`, text: `Lluvia probable (${wx.rain} %) en ${wx.venue}: el juego puede retrasarse o suspenderse. Revisa las reglas de tu casa para juegos suspendidos.` });
+    else if (wx.rain >= 30) flags.push({ team: null, risk: false, tag: 'lluvia', chip: `🌦️ Posible lluvia ${wx.rain} %`, text: `Posible lluvia (${wx.rain} %) en ${wx.venue}.` });
+    if (wx.wind >= 15) flags.push({ team: null, risk: false, tag: 'viento', chip: `💨 Viento ${wx.wind} mph`, text: `Viento fuerte (${wx.wind} mph): puede afectar los batazos largos y el total de carreras.` });
+    if (wx.temp <= 50) flags.push({ team: null, risk: false, tag: 'frio', chip: `🥶 ${wx.temp}°F`, text: `Hace frío (${wx.temp}°F): la pelota vuela menos, suele favorecer juegos de pocas carreras.` });
+  }
   for (const x of [H, A]) {
     const c = x.bullpen && x.bullpen.closer;
-    if (c && c.pitchedTwoDays) flags.push({ team: x.team, risk: true, tag: 'closer', text: `El cerrador de ${x.team} (${c.name}) lanzó ayer y antier: podría no estar disponible hoy.` });
+    if (c && c.pitchedTwoDays) flags.push({ team: x.team, risk: true, tag: 'closer', chip: `😮‍💨 Cerrador de ${nick(x.team)} cansado`, text: `El cerrador de ${x.team} (${c.name}) lanzó ayer y antier: podría no estar disponible hoy.` });
     else if (c && c.pitchedYesterday) flags.push({ team: x.team, risk: false, text: `El cerrador de ${x.team} (${c.name}) lanzó ayer.` });
   }
   const bh = parseFloat(H.bullpen && H.bullpen.era), ba = parseFloat(A.bullpen && A.bullpen.era);
   if (!isNaN(bh) && !isNaN(ba) && Math.abs(bh - ba) >= 0.75) {
     const [b, w] = bh < ba ? [H, A] : [A, H];
-    flags.push({ team: b.team, risk: false, tag: 'bp', text: `Bullpen más fuerte: ${b.team} (${b.bullpen.era} ERA) contra ${w.team} (${w.bullpen.era} ERA).` });
+    flags.push({ team: b.team, risk: false, tag: 'bp', chip: `🧱 Mejor bullpen: ${nick(b.team)}`, text: `Bullpen más fuerte: ${b.team} (${b.bullpen.era} ERA) contra ${w.team} (${w.bullpen.era} ERA).` });
   }
   const eh = parseFloat(H.pitcher && H.pitcher.era), ea = parseFloat(A.pitcher && A.pitcher.era);
   if (!isNaN(eh) && !isNaN(ea) && Math.abs(eh - ea) >= 1) {
     const [b, w] = eh < ea ? [H, A] : [A, H];
-    flags.push({ team: b.team, risk: false, tag: 'sp', text: `Ventaja en el abridor para ${b.team}: ${b.pitcher.name} (${b.pitcher.era} ERA) contra ${w.pitcher.name} (${w.pitcher.era} ERA).` });
+    flags.push({ team: b.team, risk: false, tag: 'sp', chip: `⚾ Mejor abridor: ${nick(b.team)}`, text: `Ventaja en el abridor para ${b.team}: ${b.pitcher.name} (${b.pitcher.era} ERA) contra ${w.pitcher.name} (${w.pitcher.era} ERA).` });
     if (!isNaN(bh) && !isNaN(ba) && ((b === H && bh < ba) || (b === A && ba < bh))) flags.push({ team: b.team, risk: false, tag: 'full', text: `Ventaja de pitcheo completa para ${b.team}: mejor abridor y mejor bullpen.` });
   }
   const same = x => tk(x.home) === tk(g.home) && tk(x.away) === tk(g.away) || tk(x.home) === tk(g.away) && tk(x.away) === tk(g.home);
@@ -300,10 +327,10 @@ function mlbContextFor(g) {
       const lossesX = inSeries.filter(y => { const h = tk(y.home) === tk(x.team); return (h ? y.hs : y.as) < (h ? y.as : y.hs); }).length;
       if (lossesX === need - 1) elimTxt = ' Hoy juega por su vida: si pierde, queda eliminado.';
     }
-    flags.push({ team: x.team, risk: false, tag: 'rebote', text: `Rebote: ${x.team} perdió su último juego (${mine}-${other}).${elimTxt}` });
+    flags.push({ team: x.team, risk: false, tag: 'rebote', chip: elimTxt ? `🔥 ${nick(x.team)} juega por su vida` : `🔄 ${nick(x.team)} viene de perder`, text: `Rebote: ${x.team} perdió su último juego (${mine}-${other}).${elimTxt}` });
   }
   const serie = mg && (mg.gameNo || mg.seriesState) ? { juego: mg.gameNo ? `Juego ${mg.gameNo}${mg.ofGames ? ' de ' + mg.ofGames : ''}` : null, estado: mg.seriesState } : null;
-  return { home: H, away: A, post, series: mg ? mg.series : '', serie, h2h, flags };
+  return { wx: wx || null, home: H, away: A, post, series: mg ? mg.series : "", serie, h2h, flags };
 }
 
 /* ---------- Récord y apuestas: línea de cierre y calificación ---------- */
@@ -492,6 +519,8 @@ REGLAS FIJAS:
 - Las rachas por sí solas no predicen el próximo juego: úsalas como contexto, nunca como "ya le toca".
 - Nunca digas "seguro", "sí o sí", "fijo" ni "garantizado". Di cuántas veces de cada 100 puede perder.
 - Si un rival ya clasificó y puede descansar, recomienda confirmar la alineación.
+- "Ambiente y calle": puedes buscar en internet noticias de última hora (lesiones, alineaciones, bajas, peleas en el vestuario, problemas con la directiva, rivalidad, ambiente del estadio). Separa siempre lo CONFIRMADO (con la fuente) de los RUMORES, y nunca conviertas un rumor en probabilidad. Tradúcelo en consejos cortos y claros, por ejemplo: "Juega sin su estrella: esa pata baja de 🟢 a ⚠️".
+- El clima, el récord de local/visitante y los consejos rápidos (chips) vienen en los datos; úsalos. La lluvia es un riesgo de suspensión, no de resultado.
 - Si el cerrador de un equipo está cansado, súbele el riesgo a esa pata, sobre todo en juegos cerrados.
 - Al usuario le gusta la estrategia "Rebote": equipos que perdieron su último juego (sobre todo si juegan por su vida en playoffs), combinados con alguna cuota que pague bien y pocas patas (2 o 3). Señala qué equipos están en rebote, pero dile con honestidad que perder ayer, por sí solo, no está comprobado como ventaja y que las casas ya lo meten en la cuota; lo que decide es el pitcheo y el precio.
 - Cada partido trae "seleccion_betvision" (🟢 Recomendación, 🟡 con incertidumbre alta, ⚪ sin ventaja clara). Úsala y explica la diferencia entre "creo que puede ganar" y "es buena apuesta": probabilidad del modelo contra la probabilidad que implica el precio. Si es ⚪, dilo sin forzar certeza.
@@ -504,7 +533,7 @@ async function askClaude(messages) {
   const r = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: { 'content-type': 'application/json', 'x-api-key': E.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01' },
-    body: JSON.stringify({ model: E.CLAUDE_MODEL || 'claude-sonnet-5', max_tokens: 1800, system, messages })
+    body: JSON.stringify({ model: E.CLAUDE_MODEL || 'claude-sonnet-5', max_tokens: 2200, system, messages, ...(E.ASK_NEWS === 'off' ? {} : { tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: 3 }] }) })
   });
   const j = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error((j.error && j.error.message) || `Claude ${r.status}`);
