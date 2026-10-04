@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>BetVision · Muy pronto</title>
+<meta name="description" content="Análisis deportivo con datos, no con corazonada. Apúntate y sé de los primeros: 7 días gratis al lanzar.">
+<meta property="og:title" content="BetVision · Muy pronto">
+<meta property="og:description" content="Apúntate y sé de los primeros: 7 días gratis al lanzar.">
+<meta property="og:image" content="/icon-512.png">
+<meta name="theme-color" content="#2B0A66">
+<link rel="icon" href="/icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@700;800&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--g:#FFD23F;--ink:#fff;--mut:rgba(255,255,255,.78);--card:rgba(255,255,255,.08);--line:rgba(255,255,255,.16);--ok:#22C55E;--bad:#FF6B6B;
+ --disp:"Barlow Semi Condensed","Arial Narrow",Arial,sans-serif;--text:"IBM Plex Sans","Segoe UI",Roboto,Arial,sans-serif}
+*{box-sizing:border-box}
+html{min-height:100%;background:#1A0644}
+body{margin:0;min-height:100vh;color:var(--ink);font-family:var(--text);line-height:1.5;background:radial-gradient(1200px 700px at 80% -10%,#7C3AED 0%,transparent 60%),radial-gradient(900px 600px at -10% 110%,#2563EB 0%,transparent 55%),linear-gradient(160deg,#2B0A66,#14082E 70%);padding:env(safe-area-inset-top,0px) 0 env(safe-area-inset-bottom,0px)}
+.wrap{max-width:520px;margin:0 auto;padding:36px 22px 40px;display:flex;flex-direction:column;align-items:center;text-align:center;gap:20px}
+.logo{border-radius:24px;overflow:hidden;box-shadow:0 0 0 4px rgba(255,255,255,.85),0 20px 70px rgba(255,210,63,.45)}
+.pill{display:inline-block;background:var(--g);color:#14082E;font-weight:700;font-size:13px;letter-spacing:.12em;padding:6px 14px;border-radius:999px}
+h1{font-family:var(--disp);font-weight:800;font-size:clamp(46px,12vw,68px);line-height:.95;margin:4px 0 0;text-shadow:0 6px 0 rgba(0,0,0,.18)}
+h1 span{color:var(--g)}
+.sub{font-size:18px;color:var(--mut);margin:0;max-width:420px}
+.feats{display:grid;grid-template-columns:1fr;gap:10px;width:100%;text-align:left}
+.f{display:flex;gap:14px;align-items:center;background:var(--card);border:1px solid var(--line);border-radius:16px;padding:14px 16px}
+.f b{display:block;font-size:16px}.f span{font-size:14px;color:var(--mut)}.f i{font-style:normal;font-size:28px;width:36px;text-align:center;flex:none}
+form{width:100%;background:#fff;color:#14082E;border-radius:22px;padding:20px;display:flex;flex-direction:column;gap:12px;box-shadow:0 24px 70px rgba(0,0,0,.35);text-align:left}
+form h2{font-family:var(--disp);font-size:28px;margin:0;line-height:1.05}
+.tabs{display:flex;background:#F1F0F6;border-radius:12px;padding:4px}
+.tabs button{flex:1;border:0;background:none;padding:10px;border-radius:9px;font:600 14px var(--text);color:#5B5670;cursor:pointer}
+.tabs button[aria-pressed="true"]{background:#fff;color:#14082E;box-shadow:0 2px 6px rgba(0,0,0,.08)}
+input[type=email],input[type=tel]{width:100%;font:500 17px var(--text);padding:14px 14px;border:2px solid #E3E1EC;border-radius:12px;color:#14082E}
+input:focus{outline:none;border-color:#7C3AED}
+label.ck{display:flex;gap:10px;font-size:13px;color:#5B5670;align-items:flex-start}
+label.ck input{width:18px;height:18px;margin-top:2px;accent-color:#7C3AED;flex:none}
+.go{border:0;background:linear-gradient(90deg,#FFD23F,#FFB800);color:#14082E;font:800 20px var(--disp);letter-spacing:.02em;padding:16px;border-radius:14px;cursor:pointer;box-shadow:0 10px 24px rgba(255,184,0,.35)}
+.go:disabled{opacity:.6;cursor:default}
+.msg{font-size:14px;min-height:20px;margin:0}.msg.err{color:#C0392B}
+.done{display:none;width:100%;background:#fff;color:#14082E;border-radius:22px;padding:26px 20px;box-shadow:0 24px 70px rgba(0,0,0,.35)}
+.done .big{font-size:56px;line-height:1}.done h2{font-family:var(--disp);font-size:32px;margin:10px 0 6px}
+.done p{color:#5B5670;margin:0 0 16px}
+.share{display:flex;gap:10px;justify-content:center;flex-wrap:wrap}
+.share a,.share button{border:0;text-decoration:none;font:700 15px var(--text);padding:12px 16px;border-radius:12px;cursor:pointer}
+.wa{background:#25D366;color:#fff}.cp{background:#14082E;color:#fff}
+.count{font-size:14px;color:var(--mut);margin:0}
+.legal{font-size:12px;color:rgba(255,255,255,.6);max-width:440px;margin:6px 0 0}
+.legal a{color:rgba(255,255,255,.8)}
+.lang{position:absolute;top:calc(14px + env(safe-area-inset-top,0px));right:16px;background:rgba(255,255,255,.12);border:1px solid var(--line);color:#fff;font:700 13px var(--text);padding:7px 12px;border-radius:999px;cursor:pointer}
+@media (prefers-reduced-motion:no-preference){.logo{animation:pop .7s cubic-bezier(.2,1.5,.4,1) both}@keyframes pop{from{transform:scale(.6);opacity:0}}}
+</style></head><body>
+<button class="lang" id="lang">EN</button>
+<main class="wrap">
+ <div class="logo"><svg width="96" height="96" style="display:block" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><defs><linearGradient id="gg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#F9DC82"/><stop offset="1" stop-color="#C38A22"/></linearGradient>
+<radialGradient id="glow" cx="50%" cy="56%" r="50%"><stop offset="0" stop-color="#E9B949" stop-opacity=".28"/><stop offset="1" stop-color="#E9B949" stop-opacity="0"/></radialGradient>
+<radialGradient id="iris" cx="45%" cy="40%" r="60%"><stop offset="0" stop-color="#7DB6FF"/><stop offset="1" stop-color="#2563EB"/></radialGradient></defs><rect width="512" height="512" rx="116" fill="#0B0E14"/><rect width="512" height="512" rx="116" fill="url(#glow)"/><path d="M138 261 L22 241" stroke="url(#gg)" stroke-width="10" stroke-linecap="round" opacity="0.6"/><path d="M152 222 L50 163" stroke="url(#gg)" stroke-width="6" stroke-linecap="round" opacity="0.35"/><path d="M179 190 L103 100" stroke="url(#gg)" stroke-width="10" stroke-linecap="round" opacity="0.6"/><path d="M215 169 L175 58" stroke="url(#gg)" stroke-width="6" stroke-linecap="round" opacity="0.35"/><path d="M256 162 L256 44" stroke="url(#gg)" stroke-width="10" stroke-linecap="round" opacity="0.6"/><path d="M297 169 L337 58" stroke="url(#gg)" stroke-width="6" stroke-linecap="round" opacity="0.35"/><path d="M333 190 L409 100" stroke="url(#gg)" stroke-width="10" stroke-linecap="round" opacity="0.6"/><path d="M360 222 L462 163" stroke="url(#gg)" stroke-width="6" stroke-linecap="round" opacity="0.35"/><path d="M374 261 L490 241" stroke="url(#gg)" stroke-width="10" stroke-linecap="round" opacity="0.6"/><path d="M256 104 L412 374 H100 Z" fill="#0B0E14" stroke="url(#gg)" stroke-width="16" stroke-linejoin="round"/><path d="M168 296 Q256 222 344 296 Q256 362 168 296 Z" fill="#0B0E14" stroke="url(#gg)" stroke-width="12" stroke-linejoin="round"/><circle cx="256" cy="296" r="34" fill="url(#iris)"/><circle cx="256" cy="296" r="13" fill="#0B0E14"/><circle cx="268" cy="284" r="7" fill="#fff" opacity=".9"/></svg></div>
+ <span class="pill" data-en="COMING SOON">MUY PRONTO</span>
+ <h1 data-en="Bet with <span>data</span>, not gut feeling.">Apuesta con <span>datos</span>, no con corazonada.</h1>
+ <p class="sub" data-en="BetVision analyzes every game: real probability, whether the odds pay well, pitching, fatigue and 10,000 simulations.">BetVision analiza cada partido: probabilidad real, si la cuota paga bien, pitcheo, cansancio y 10,000 simulaciones.</p>
+ <div class="feats">
+  <div class="f"><i>🎯</i><div><b data-en="Real probability">Probabilidad real</b><span data-en="For every team, from all sportsbooks combined">De cada equipo, con todas las casas juntas</span></div></div>
+  <div class="f"><i>💰</i><div><b data-en="Odds that pay well">Cuotas que pagan bien</b><span data-en="Green when the book overpays you">Verde cuando la casa te paga de más</span></div></div>
+  <div class="f"><i>🔒</i><div><b data-en="Nothing gets deleted">Nada se borra</b><span data-en="We show our wins and our losses">Enseñamos las que ganamos y las que perdemos</span></div></div>
+ </div>
+ <form id="f" novalidate>
+  <h2 data-en="Be one of the first: 7 days free at launch">Sé de los primeros: 7 días gratis al lanzar</h2>
+  <p style="margin:-4px 0 0;font-size:15px;color:#5B5670" data-en="Then just <b style='color:#7C3AED'>$9.99/month</b>. Cancel anytime.">Después, solo <b style="color:#7C3AED">$9.99 al mes</b>. Cancela cuando quieras.</p>
+  <div class="tabs" role="group" aria-label="Cómo te avisamos"><button type="button" data-k="email" aria-pressed="true" data-en="Email">Correo</button><button type="button" data-k="phone" aria-pressed="false">WhatsApp</button></div>
+  <input id="email" type="email" inputmode="email" autocomplete="email" placeholder="tu@correo.com" data-en-ph="you@email.com" aria-label="Correo">
+  <input id="phone" type="tel" inputmode="tel" autocomplete="tel" placeholder="+1 305 555 1234" aria-label="WhatsApp" hidden>
+  <label class="ck"><input type="checkbox" id="age"><span data-en="I'm 21 or older and I want to get the launch notice.">Tengo 21 años o más y quiero recibir el aviso del lanzamiento.</span></label>
+  <button class="go" id="go" type="submit" data-en="I want to be first 🚀">Quiero ser de los primeros 🚀</button>
+  <p class="msg" id="msg" role="status"></p>
+ </form>
+ <div class="done" id="done" role="status">
+  <div class="big">🎉</div>
+  <h2 data-en="You're on the list!">¡Ya estás en la lista!</h2>
+  <p data-en="We'll let you know the day we launch. Share it with friends who bet:">Te avisamos el día del lanzamiento. Compártela con tus amigos que apuestan:</p>
+  <div class="share"><a class="wa" id="wa" target="_blank" rel="noopener" data-en="Share on WhatsApp">Compartir por WhatsApp</a><button class="cp" id="cp" type="button" data-en="Copy link">Copiar enlace</button></div>
+ </div>
+ <p class="count" id="count"></p>
+ <p class="legal" data-en="BetVision provides informational analysis. It doesn't accept bets or guarantee winnings. 21+ only. Play responsibly: 1-800-GAMBLER. We'll only use your contact to notify you about BetVision. <a href='/terminos'>Terms</a>">BetVision ofrece análisis informativos. No acepta apuestas ni garantiza ganancias. Solo mayores de 21. Juega responsable: 1-800-GAMBLER. Solo usaremos tu contacto para avisarte de BetVision. <a href="/terminos">Términos</a></p>
+</main>
+<script>
+const Q=new URLSearchParams(location.search);
+let LANG=(()=>{const q=Q.get('lang');if(q==='en'||q==='es')return q;try{const v=localStorage.getItem('bv-wl-lang');if(v)return v}catch(e){}return (navigator.language||'es').toLowerCase().startsWith('en')?'en':'es'})();
+const ES={};document.querySelectorAll('[data-en]').forEach((e,i)=>{e.dataset.i=i;ES[i]=e.innerHTML});
+function applyLang(){document.documentElement.lang=LANG;document.querySelectorAll('[data-en]').forEach(e=>e.innerHTML=LANG==='en'?e.dataset.en:ES[e.dataset.i]);
+ const em=document.getElementById('email');em.placeholder=LANG==='en'?'you@email.com':'tu@correo.com';document.getElementById('lang').textContent=LANG==='en'?'ES':'EN';document.title=LANG==='en'?'BetVision · Coming soon':'BetVision · Muy pronto';loadCount()}
+document.getElementById('lang').onclick=()=>{LANG=LANG==='en'?'es':'en';try{localStorage.setItem('bv-wl-lang',LANG)}catch(e){}applyLang()};
+let kind='email';
+document.querySelectorAll('.tabs button').forEach(b=>b.onclick=()=>{kind=b.dataset.k;document.querySelectorAll('.tabs button').forEach(x=>x.setAttribute('aria-pressed',x===b));document.getElementById('email').hidden=kind!=='email';document.getElementById('phone').hidden=kind!=='phone';(kind==='email'?document.getElementById('email'):document.getElementById('phone')).focus()});
+const T=(es,en)=>LANG==='en'?en:es,msg=document.getElementById('msg');
+async function loadCount(){try{const r=await fetch('/api/waitlist/count');const j=await r.json();const c=document.getElementById('count');c.textContent=j.count>=25?T(`🔥 ${j.count.toLocaleString()} personas ya se apuntaron`,`🔥 ${j.count.toLocaleString()} people already joined`):''}catch(e){}}
+document.getElementById('f').onsubmit=async e=>{e.preventDefault();msg.className='msg';msg.textContent='';
+ const v=(kind==='email'?document.getElementById('email'):document.getElementById('phone')).value.trim();
+ if(kind==='email'&&!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(v)){msg.className='msg err';msg.textContent=T('Escribe un correo válido.','Enter a valid email.');return}
+ if(kind==='phone'&&v.replace(/\D/g,'').length<10){msg.className='msg err';msg.textContent=T('Escribe tu número con código de área.','Enter your number with area code.');return}
+ if(!document.getElementById('age').checked){msg.className='msg err';msg.textContent=T('Confirma que tienes 21 años o más.','Confirm you are 21 or older.');return}
+ const go=document.getElementById('go');go.disabled=true;
+ try{const r=await fetch('/api/waitlist',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({kind,contact:v,lang:LANG,source:Q.get('src')||Q.get('utm_source')||document.referrer||'directo'})});
+  const j=await r.json();if(!r.ok)throw new Error(j.error||'');
+  document.getElementById('f').style.display='none';document.getElementById('done').style.display='block';
+  const link=location.origin+'/espera?src=amigo';
+  document.getElementById('wa').href='https://wa.me/?text='+encodeURIComponent(T('Mira BetVision: análisis deportivo con datos. Apúntate y te dan 7 días gratis 👉 ','Check out BetVision: sports analysis with data. Join and get 7 days free 👉 ')+link);
+  document.getElementById('cp').onclick=async()=>{try{await navigator.clipboard.writeText(link);document.getElementById('cp').textContent=T('¡Copiado!','Copied!')}catch(e){prompt('',link)}};
+  loadCount();
+ }catch(err){msg.className='msg err';msg.textContent=(err instanceof TypeError||!err.message)?T('No se pudo conectar. Revisa tu internet e intenta de nuevo.','Could not connect. Check your internet and try again.'):err.message}finally{go.disabled=false}};
+applyLang();
+</script></body></html>

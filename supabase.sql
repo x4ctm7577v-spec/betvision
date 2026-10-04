@@ -37,3 +37,47 @@ create table if not exists clicks (
   book text, kind text, user_id uuid, created_at timestamptz default now()
 );
 alter table clicks enable row level security;
+
+-- Récord público de recomendaciones (nunca se borran)
+create table if not exists picks (
+  id bigint generated always as identity primary key,
+  game_id text, sport_key text, league text, start_time timestamptz,
+  team text, opponent text, kind text default 'valor',
+  prob numeric, odds numeric, book text, ev numeric, closing_prob numeric,
+  status text default 'open', profit numeric,
+  created_at timestamptz default now(),
+  unique (game_id, team, kind)
+);
+create table if not exists parlays (
+  id bigint generated always as identity primary key,
+  day text, kind text, legs jsonb, prob numeric, odds numeric,
+  status text default 'open', profit numeric,
+  created_at timestamptz default now(),
+  unique (day, kind)
+);
+alter table picks enable row level security;
+alter table parlays enable row level security;
+
+-- Prueba gratis de 7 días sin tarjeta
+alter table profiles add column if not exists trial_ends timestamptz;
+
+
+-- Líneas de apertura (para medir cómo se mueve la cuota)
+create table if not exists lines (
+  game_id text primary key,
+  data jsonb not null,
+  first_seen timestamptz not null default now()
+);
+alter table lines enable row level security;
+
+
+-- Lista de espera (página /espera)
+create table if not exists waitlist (
+  id bigserial primary key,
+  contact text unique not null,
+  kind text not null default 'email',
+  lang text default 'es',
+  source text,
+  created_at timestamptz not null default now()
+);
+alter table waitlist enable row level security;

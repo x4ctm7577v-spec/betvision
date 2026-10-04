@@ -31,6 +31,32 @@ const LABEL = { baseball_mlb: 'MLB', americanfootball_nfl: 'NFL', icehockey_nhl:
 let AFFILIATES = [];
 try { AFFILIATES = JSON.parse(E.AFFILIATES || '[]'); } catch (e) { console.error('AFFILIATES no es un JSON válido'); }
 const affOf = key => AFFILIATES.find(a => a.key === key);
+// Línea de apertura: la primera probabilidad que vimos de cada partido (se guarda en Supabase si existe)
+const openLines = {};
+async function loadOpenLines() {
+  if (!sb) return;
+  try { const { data } = await sb.from('lines').select('game_id,data').gt('first_seen', new Date(Date.now() - 10 * 864e5).toISOString()); for (const r of data || []) openLines[r.game_id] = r.data; } catch (e) { console.error('Líneas', e.message); }
+}
+function marketFlags(g) {
+  const out = [];
+  // Movimiento de línea
+  const op = openLines[g.id];
+  if (op) {
+    for (const o of g.outcomes) {
+      if (op[o.name] == null) continue;
+      const mv = o.p - op[o.name]; o.open = op[o.name];
+      if (mv >= 0.025) out.push({ team: o.name, risk: false, tag: 'linea', chip: `💸 Línea hacia ${nick(o.name)} (+${(mv * 100).toFixed(1)})`, text: `La línea se movió a favor de ${o.name}: abrió en ${(op[o.name] * 100).toFixed(1)} % y ahora está en ${(o.p * 100).toFixed(1)} %. Suele ser dinero grande (sharp) o noticias.` });
+    }
+  }
+  // Arbitraje: si la suma de las mejores cuotas da menos de 100 %, se puede cubrir todo
+  const sum = g.outcomes.reduce((t, o) => t + 1 / o.best.price, 0);
+  if (sum < 0.995) {
+    g.arb = { margin: 1 - sum, legs: g.outcomes.map(o => ({ team: o.name, book: o.best.book, price: o.best.price, share: (1 / o.best.price) / sum })) };
+    out.push({ team: null, risk: false, tag: 'arb', chip: `🔒 Arbitraje ${((1 - sum) * 100).toFixed(1)} %`, text: `Arbitraje: apostando a los dos lados en casas distintas (${g.arb.legs.map(l => `${l.team} en ${l.book} ${l.price.toFixed(2)}`).join(' y ')}) ganas ${((1 - sum) * 100).toFixed(1)} % pase lo que pase. Las cuotas cambian rápido y las casas limitan a quien lo hace seguido.` });
+  } else g.arb = null;
+  return out;
+}
+const flagsOf = g => (g.ctx && !g.ctx.locked && g.ctx.flags ? g.ctx.flags : []).concat(g.mktFlags || []);
 let cache = { updated: null, games: [], reco: null, remaining: null, errors: [], myBook: MY_BOOK };
 
 /* ---------- Cuotas y probabilidad de consenso ---------- */
@@ -81,7 +107,7 @@ function recommend(games) {
   const up = games.filter(g => new Date(g.start).getTime() > now && g.outcomes.length === 2);
   const pick = list => { const seen = new Set(), out = []; for (const c of list) { if (seen.has(c.gid)) continue; seen.add(c.gid); out.push(c); if (out.length === 3) break; } return out; };
   const cands = up.flatMap(g => g.outcomes.map((o, i) => {
-    const fl = g.ctx ? g.ctx.flags.filter(f => f.team === o.name || (f.team == null && f.risk)) : [];
+    const fl = flagsOf(g).filter(f => f.team === o.name || (f.team == null && f.risk));
     const pb = o.pBV != null ? o.pBV : o.p, price = o.myPrice || o.best.price;
     return { gid: g.id, idx: i, league: g.league, start: g.start, team: o.name, vs: o.name === g.home ? g.away : g.home, p: pb, pc: o.p, price, ev: pb * price - 1, risk: fl.filter(f => f.risk).map(f => f.text), notes: fl.filter(f => !f.risk).map(f => f.text), bestPrice: o.best.price, bestBook: o.best.book, plus: fl.some(f => f.plus), tags: fl.map(f => f.tag).filter(Boolean) };
   }));
@@ -113,7 +139,32 @@ function recommend(games) {
   }).filter(c => (c.reasons > 0 || c.evBest > 0) && c.evBest > -0.045 && c.score > 0).sort((a, b) => b.score - a.score);
   const bvLegs = pick(scored).slice(0, 3);
   const bv = bvLegs.length >= 2 ? sum(bvLegs) : null;
-  return { bv, bvTop: scored[0] || null, rebote, safest: sum(safest), safeFiltered, macho, context, value: v && v.legs.length >= 2 ? v : null, dogs: dogList, dogParlay: dp && dp.legs.length === 2 ? dp : null };
+  // Parlay sorpresa: underdogs que las casas no quieren, pero con razones reales para ganar
+  const sorp = [];
+  for (const c of cands) {
+    if (c.team === 'Draw' || c.pc >= 0.48 || c.p < 0.33 || c.risk.length) continue;
+    const g = up.find(x => x.id === c.gid), x = g && g.ctx && !g.ctx.locked ? g.ctx : null;
+    if (!x) continue;
+    const me = tk(c.team) === tk(x.home.team) ? x.home : x.away, op = me === x.home ? x.away : x.home, why = [];
+    for (const f of flagsOf(g)) {
+      if (f.team === c.team && !f.risk && ['sp', 'bp', 'full', 'rebote', 'casa', 'sinsuerte', 'linea', 'sim'].includes(f.tag)) why.push(f.text);
+      if (f.team === op.team && ['suerte', 'cansancio'].includes(f.tag)) why.push('Al rival: ' + f.text);
+      if (f.team === c.team && f.tag === 'visita' && /bien/.test(f.text)) why.push(f.text);
+      if (f.team === c.team && f.plus) why.push(f.text);
+      if (f.team === op.team && f.risk && f.tag === 'closer') why.push('Al rival le falta su cerrador: ' + f.text);
+      if (f.team === op.team && f.tag === 'visita' && /sufre/.test(f.text)) why.push(f.text);
+    }
+    const w1 = (x.h2hW || {})[tk(c.team)] || 0, w2 = (x.h2hW || {})[tk(op.team)] || 0;
+    if (x.h2hN >= 3 && w1 > w2) why.push(`Le ha ganado ${w1} de los últimos ${w1 + w2} juegos a ${op.team}.`);
+    const st = /^W(\d+)/.exec(me.streak || ''); if (st && +st[1] >= 3) why.push(`Viene en racha de ${st[1]} victorias.`);
+    const l = /^(\d+)-(\d+)$/.exec(me.l10 || ''); if (l && +l[1] >= 7) why.push(`Ganó ${l[1]} de sus últimos 10.`);
+    if (c.p - c.pc >= 0.01) why.push(`Nuestro modelo le da ${((c.p - c.pc) * 100).toFixed(1)} puntos más que las casas.`);
+    if (why.length >= 2) sorp.push(Object.assign({}, c, { why }));
+  }
+  sorp.sort((a, b) => b.why.length - a.why.length || b.p - a.p);
+  const sorpLegs = pick(sorp).slice(0, 2);
+  const sorpresa = sorpLegs.length === 2 ? sum(sorpLegs) : null;
+  return { sorpresa, sorpList: sorp.slice(0, 5), bv, bvTop: scored[0] || null, rebote, safest: sum(safest), safeFiltered, macho, context, value: v && v.legs.length >= 2 ? v : null, dogs: dogList, dogParlay: dp && dp.legs.length === 2 ? dp : null };
 }
 
 
@@ -138,7 +189,8 @@ async function loadMlbContext() {
         l10: l10 ? `${l10.wins}-${l10.losses}` : null, clinched: !!t.clinched,
         elim: !t.clinched && t.eliminationNumber === 'E' && t.wildCardEliminationNumber === 'E',
         left: 162 - (t.wins + t.losses),
-        homeRec: hm ? [hm.wins, hm.losses] : null, awayRec: aw ? [aw.wins, aw.losses] : null
+        homeRec: hm ? [hm.wins, hm.losses] : null, awayRec: aw ? [aw.wins, aw.losses] : null,
+        rs: t.runsScored != null ? +t.runsScored : null, ra: t.runsAllowed != null ? +t.runsAllowed : null
       };
     }
   } catch (e) { console.error('Contexto MLB (posiciones):', e.message); }
@@ -151,7 +203,7 @@ async function loadMlbContext() {
       const ss = g.seriesStatus || {};
       const final = g.status && (g.status.abstractGameState === 'Final' || /final|completed/i.test(g.status.detailedState || ''));
       games.push({ date: g.gameDate, type: g.gameType, series: g.seriesDescription || '', seriesState: ss.result || ss.description || null, gameNo: g.seriesGameNumber || null, ofGames: g.gamesInSeries || null,
-        final: !!final, hs: g.teams.home.score, as: g.teams.away.score, venue: g.venue ? { name: g.venue.name, lat: g.venue.location && g.venue.location.defaultCoordinates && g.venue.location.defaultCoordinates.latitude, lon: g.venue.location && g.venue.location.defaultCoordinates && g.venue.location.defaultCoordinates.longitude, roof: g.venue.fieldInfo && g.venue.fieldInfo.roofType } : null,
+        final: !!final, hs: g.teams.home.score, as: g.teams.away.score, venue: g.venue ? { id: g.venue.id, name: g.venue.name, lat: g.venue.location && g.venue.location.defaultCoordinates && g.venue.location.defaultCoordinates.latitude, lon: g.venue.location && g.venue.location.defaultCoordinates && g.venue.location.defaultCoordinates.longitude, roof: g.venue.fieldInfo && g.venue.fieldInfo.roofType } : null,
         home: g.teams.home.team.name, away: g.teams.away.team.name, hid: g.teams.home.team.id, aid: g.teams.away.team.id, hp: hp ? { id: hp.id, name: hp.fullName } : null, ap: ap ? { id: ap.id, name: ap.fullName } : null });
     }
   } catch (e) { console.error('Contexto MLB (calendario):', e.message); }
@@ -216,9 +268,9 @@ async function loadMlbContext() {
 function applyContext(g) {
   // Motivación (ya existía) + pitcheo. Los pesos son pequeños a propósito: el mercado ya descuenta
   // buena parte del pitcheo, y se ajustarán con los resultados del Récord.
-  const TILT = { sp: 0.015, bp: 0.01, full: 0.005, closer: -0.015 };
+  const TILT = { sp: 0.015, bp: 0.01, full: 0.005, closer: -0.015, suerte: -0.01, sinsuerte: 0.01, cansancio: -0.01 };
   const adjOf = name => {
-    const fl = (g.ctx ? g.ctx.flags : []).filter(f => f.team === name);
+    const fl = flagsOf(g).filter(f => f.team === name);
     const a = fl.filter(f => f.plus).reduce((t, f) => t + f.adj, 0) + fl.reduce((t, f) => t + (TILT[f.tag] || 0), 0);
     return Math.max(-0.05, Math.min(0.05, a));
   };
@@ -236,7 +288,7 @@ function applyContext(g) {
 // Selección por partido: analiza a los dos equipos y elige el de mejor escenario (puede ser el underdog)
 function selectFor(g) {
   if (g.outcomes.length !== 2) return null;
-  const c = g.ctx, fl = c && !c.locked ? c.flags : [];
+  const c = g.ctx, fl = flagsOf(g);
   const sides = g.outcomes.map((o, idx) => {
     const price = o.myPrice || o.best.price, pM = o.pBV != null ? o.pBV : o.p, pImpl = 1 / price;
     const mine = fl.filter(f => f.team === o.name || (f.team == null && f.risk));
@@ -259,13 +311,49 @@ function selectFor(g) {
   const other = sides.find(x => x !== sel);
   return { state, team: sel.team, idx: sel.idx, underdog: sel.pMarket < other.pMarket, pM: sel.pM, pMarket: sel.pMarket, pImpl: sel.pImpl, edge: sel.edge, ev: sel.ev, price: sel.price, book: sel.book, uncertainty: unc.length ? 'alta' : 'baja', unc, sides };
 }
+/* ---------- Simulación Monte Carlo (béisbol) ----------
+   Cada equipo anota según: su ofensiva (carreras por juego) contra el pitcheo rival
+   (abridor ~5.5 innings + bullpen ~3.5 innings) y una pequeña ventaja de local.
+   Las carreras se sortean con una distribución con varianza realista (gamma-Poisson)
+   y los empates se resuelven en extra innings. Se repite SIM_N veces. */
+const SIM_N = Math.max(1000, +(E.SIM_N || 10000));
+function gammaS(k) { // Marsaglia-Tsang, k >= 1
+  const d = k - 1 / 3, c = 1 / Math.sqrt(9 * d);
+  for (;;) { let x, v; do { const u1 = Math.random(), u2 = Math.random(); x = Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2); v = 1 + c * x; } while (v <= 0); v = v * v * v; const u = Math.random(); if (u < 1 - 0.0331 * x ** 4 || Math.log(u) < 0.5 * x * x + d * (1 - v + Math.log(v))) return d * v; }
+}
+function poissonS(l) { if (l <= 0) return 0; const L = Math.exp(-l); let k = 0, p = 1; do { k++; p *= Math.random(); } while (p > L); return k - 1; }
+function simulateGame(lh, la, n = SIM_N) {
+  const K = 6; let hw = 0, sumH = 0, sumA = 0;
+  for (let i = 0; i < n; i++) {
+    let h = poissonS(gammaS(K) * lh / K), a = poissonS(gammaS(K) * la / K);
+    while (h === a) { h += poissonS(lh / 9 * 1.1); a += poissonS(la / 9 * 1.1); } // extra innings
+    if (h > a) hw++; sumH += h; sumA += a;
+  }
+  return { n, pHome: hw / n, runsH: sumH / n, runsA: sumA / n };
+}
+function simFor(H, A) {
+  const T = Object.values(mlbCtx.teams).filter(t => t.rs != null && t.w + t.l > 0);
+  if (T.length < 8) return null;
+  const lg = T.reduce((t, x) => t + x.rs / (x.w + x.l), 0) / T.length; // carreras por juego de la liga
+  const pf = x => { // pitcheo que enfrenta el rival (1 = promedio)
+    const g = x.w + x.l, team = x.ra / g / lg;
+    const sp = parseFloat(x.pitcher && x.pitcher.era), bp = parseFloat(x.bullpen && x.bullpen.era), lgEra = lg * 0.92;
+    if (isNaN(sp) && isNaN(bp)) return team;
+    const comp = ((isNaN(sp) ? lgEra * team : sp) * 5.5 + (isNaN(bp) ? lgEra * team : bp) * 3.5) / 9 / lgEra;
+    return 0.6 * comp + 0.4 * team; // mezcla con el récord del equipo para no exagerar un abridor
+  };
+  if (H.rs == null || A.rs == null || !H.w || !A.w) return null;
+  const offH = H.rs / (H.w + H.l) / lg, offA = A.rs / (A.w + A.l) / lg;
+  const lh = lg * offH * pf(A) * 1.02, la = lg * offA * pf(H) * 0.98;
+  return Object.assign(simulateGame(lh, la), { lh, la });
+}
 const nick = n => /Sox$|Jays$/.test(n) ? n.split(' ').slice(-2).join(' ') : n.split(' ').pop();
 function mlbContextFor(g) {
   if (g.sport !== 'baseball_mlb' || (!Object.keys(mlbCtx.teams).length && !mlbCtx.games.length)) return null;
   const t0 = new Date(g.start).getTime();
   const mg = mlbCtx.games.find(x => tk(x.home) === tk(g.home) && tk(x.away) === tk(g.away) && Math.abs(new Date(x.date) - t0) < 6 * 3600e3);
   const post = mg ? !['R', 'S', 'E', 'A'].includes(mg.type) : false;
-  const side = (name, p) => { const t = mlbCtx.teams[tk(name)]; return { homeRec: t ? t.homeRec : null, awayRec: t ? t.awayRec : null, team: name, record: t ? `${t.w}-${t.l}` : null, l10: t ? t.l10 : null, streak: t ? t.streak : null, clinched: t ? t.clinched : false, elim: t ? t.elim : false, left: t ? t.left : null, pitcher: p || null }; };
+  const side = (name, p) => { const t = mlbCtx.teams[tk(name)]; return { rs: t ? t.rs : null, ra: t ? t.ra : null, w: t ? t.w : null, l: t ? t.l : null, homeRec: t ? t.homeRec : null, awayRec: t ? t.awayRec : null, team: name, record: t ? `${t.w}-${t.l}` : null, l10: t ? t.l10 : null, streak: t ? t.streak : null, clinched: t ? t.clinched : false, elim: t ? t.elim : false, left: t ? t.left : null, pitcher: p || null }; };
   const H = side(g.home, mg && mg.hp), A = side(g.away, mg && mg.ap), flags = [];
   const pens = mlbCtx.pens || {};
   if (mg) { H.bullpen = pens[mg.hid] || null; A.bullpen = pens[mg.aid] || null; }
@@ -277,6 +365,25 @@ function mlbContextFor(g) {
     if (!post && y.clinched && y.left !== null && y.left <= 3 && !x.clinched) flags.push({ team: x.team, plus: true, adj: x.elim ? 0.02 : 0.04, text: x.elim ? `${x.team} juega contra un rival que ya clasificó y puede sentar a sus estrellas.` : `${x.team} todavía necesita ganar y su rival ya clasificó: puede sentar a sus estrellas. Ventaja de motivación.` });
     const m = /^([WL])(\d+)$/.exec(x.streak || '');
     if (m && +m[2] >= 3) flags.push({ team: x.team, risk: false, text: `${x.team} lleva ${m[2]} ${m[1] === 'W' ? 'victorias' : 'derrotas'} seguidas. Ojo: las rachas no predicen el próximo juego.` });
+  }
+  // Suerte vs. calidad (récord pitagórico: lo que "debería" llevar según sus carreras)
+  for (const x of [H, A]) {
+    if (x.rs == null || x.ra == null || !x.w || x.w + x.l < 40) continue;
+    const exp = Math.pow(x.rs, 1.83) / (Math.pow(x.rs, 1.83) + Math.pow(x.ra, 1.83)), act = x.w / (x.w + x.l), n = x.w + x.l;
+    const ew = Math.round(exp * n), diff = act - exp;
+    x.pyth = `${ew}-${n - ew}`;
+    if (diff >= 0.035) flags.push({ team: x.team, risk: false, tag: 'suerte', chip: `🍀 ${nick(x.team)} con suerte`, text: `${x.team} va ${x.w}-${x.l}, pero por sus carreras (${x.rs} anotadas, ${x.ra} permitidas) "debería" ir ${ew}-${n - ew}. Ha tenido suerte: suele bajar.` });
+    if (diff <= -0.035) flags.push({ team: x.team, risk: false, tag: 'sinsuerte', chip: `📉 ${nick(x.team)} mejor de lo que parece`, text: `${x.team} va ${x.w}-${x.l}, pero por sus carreras (${x.rs} anotadas, ${x.ra} permitidas) "debería" ir ${ew}-${n - ew}. Es mejor equipo que su récord.` });
+  }
+  // Cansancio: muchos juegos seguidos o juego de día tras jugar de noche
+  for (const x of [H, A]) {
+    const mine = mlbCtx.games.filter(y => (tk(y.home) === tk(x.team) || tk(y.away) === tk(x.team)) && new Date(y.date).getTime() < t0 && new Date(y.date).getTime() > t0 - 7 * 864e5);
+    const last = mine.sort((a, b) => new Date(b.date) - new Date(a.date))[0];
+    if (mine.length >= 7) flags.push({ team: x.team, risk: false, tag: 'cansancio', chip: `😴 ${nick(x.team)}: ${mine.length} juegos en 7 días`, text: `${x.team} jugó ${mine.length} juegos en los últimos 7 días: puede llegar cansado.` });
+    if (last) {
+      const lt = new Date(last.date), gap = (t0 - lt.getTime()) / 3600e3;
+      if (lt.getUTCHours() >= 23 && new Date(t0).getUTCHours() <= 19 && gap < 20) flags.push({ team: x.team, risk: false, tag: 'cansancio', chip: `🌙 ${nick(x.team)} jugó anoche`, text: `${x.team} jugó anoche y hoy juega de día: menos descanso que su rival.` });
+    }
   }
   // De local / de visitante
   const pctRec = r => r && r[0] + r[1] >= 20 ? r[0] / (r[0] + r[1]) : null;
@@ -312,6 +419,9 @@ function mlbContextFor(g) {
   const fmtG = x => `${new Date(x.date).toLocaleDateString('es', { timeZone: 'America/New_York', day: 'numeric', month: 'short' })}: ${x.away} ${x.as} en ${x.home} ${x.hs}`;
   const done = mlbCtx.games.filter(x => x.final && new Date(x.date).getTime() < t0).sort((a, b) => new Date(b.date) - new Date(a.date));
   const h2h = done.filter(same).slice(0, 5).map(fmtG);
+  // Historial reciente entre ellos (últimos 10)
+  const h2hW = {}; for (const y of done.filter(same).slice(0, 10)) { if (y.hs == null || y.as == null || y.hs === y.as) continue; const w = y.hs > y.as ? y.home : y.away; h2hW[tk(w)] = (h2hW[tk(w)] || 0) + 1; }
+  const h2hN = done.filter(same).slice(0, 10).length;
   const lastOf = name => { const x = done.find(y => tk(y.home) === tk(name) || tk(y.away) === tk(name)); return x ? fmtG(x) : null; };
   H.lastGame = lastOf(g.home); A.lastGame = lastOf(g.away);
   // Rebote: equipo que perdió su último juego (la estrategia del usuario; se mide en el Récord)
@@ -330,7 +440,26 @@ function mlbContextFor(g) {
     flags.push({ team: x.team, risk: false, tag: 'rebote', chip: elimTxt ? `🔥 ${nick(x.team)} juega por su vida` : `🔄 ${nick(x.team)} viene de perder`, text: `Rebote: ${x.team} perdió su último juego (${mine}-${other}).${elimTxt}` });
   }
   const serie = mg && (mg.gameNo || mg.seriesState) ? { juego: mg.gameNo ? `Juego ${mg.gameNo}${mg.ofGames ? ' de ' + mg.ofGames : ''}` : null, estado: mg.seriesState } : null;
-  return { wx: wx || null, home: H, away: A, post, series: mg ? mg.series : "", serie, h2h, flags };
+  // Viaje: cambio de huso horario desde el estadio del juego anterior
+  for (const x of [H, A]) {
+    const prev = mlbCtx.games.filter(y => (tk(y.home) === tk(x.team) || tk(y.away) === tk(x.team)) && new Date(y.date).getTime() < t0).sort((a, b) => new Date(b.date) - new Date(a.date))[0];
+    const vNow = mg && mg.venue, vPrev = prev && prev.venue;
+    if (vNow && vPrev && vNow.lon != null && vPrev.lon != null && (t0 - new Date(prev.date).getTime()) < 36 * 3600e3) {
+      const tz = Math.round(Math.abs(vNow.lon - vPrev.lon) / 15);
+      if (tz >= 2) flags.push({ team: x.team, risk: false, tag: 'cansancio', chip: `✈️ ${nick(x.team)} viajó ${tz} husos`, text: `${x.team} jugó ayer en ${vPrev.name} y hoy en ${vNow.name}: cruzó ${tz} husos horarios con poco descanso.` });
+    }
+  }
+  // Simulación Monte Carlo
+  let sim = null;
+  try { sim = simFor(H, A); } catch (e) { sim = null; }
+  if (sim) {
+    const mh = (g.outcomes.find(o => tk(o.name) === tk(g.home)) || {}).p, ma = (g.outcomes.find(o => tk(o.name) === tk(g.away)) || {}).p;
+    for (const [x, ps, pm] of [[H, sim.pHome, mh], [A, 1 - sim.pHome, ma]]) {
+      if (pm == null) continue;
+      if (ps - pm >= 0.05) flags.push({ team: x.team, risk: false, tag: 'sim', chip: `🎯 Simulación ve a ${nick(x.team)}`, text: `Simulación: ${x.team} ganó ${Math.round(ps * sim.n).toLocaleString('en-US')} de ${sim.n.toLocaleString('en-US')} juegos simulados (${(ps * 100).toFixed(1)} %). Las casas le dan ${(pm * 100).toFixed(1)} %.` });
+    }
+  }
+  return { sim, h2hW, h2hN, wx: wx || null, home: H, away: A, post, series: mg ? mg.series : "", serie, h2h, flags };
 }
 
 /* ---------- Récord y apuestas: línea de cierre y calificación ---------- */
@@ -364,13 +493,21 @@ async function recordPicks(games, reco) {
     const k = g.pick; if (!k || k.state === 'blanco' || new Date(g.start).getTime() <= now) continue;
     rows.push({ game_id: g.id, sport_key: g.sport, league: g.league, start_time: g.start, team: k.team, opponent: k.team === g.home ? g.away : g.home, kind: k.state === 'verde' ? 'sel_verde' : 'sel_amarillo', prob: k.pM, odds: k.price, book: k.book, ev: k.ev, closing_prob: k.pMarket });
   }
+  for (const g of games) {
+    if (new Date(g.start).getTime() <= now || !g.ctx || !g.ctx.sim) continue;
+    for (const f of (g.ctx.flags || []).filter(f => f.tag === 'sim')) {
+      const o = g.outcomes.find(x => x.name === f.team); if (!o) continue;
+      const ps = tk(o.name) === tk(g.home) ? g.ctx.sim.pHome : 1 - g.ctx.sim.pHome, price = o.myPrice || o.best.price;
+      rows.push({ game_id: g.id, sport_key: g.sport, league: g.league, start_time: g.start, team: o.name, opponent: o.name === g.home ? g.away : g.home, kind: 'simulacion', prob: ps, odds: price, book: o.myPrice ? o.myBook : o.best.book, ev: ps * price - 1, closing_prob: o.p });
+    }
+  }
   for (const c of reco.rebote || []) {
     const g = games.find(x => x.id === c.gid); if (!g || new Date(g.start).getTime() <= now) continue;
     rows.push({ game_id: c.gid, sport_key: g.sport, league: g.league, start_time: g.start, team: c.team, opponent: c.vs, kind: 'rebote', prob: c.p, odds: c.price, book: null, ev: c.ev, closing_prob: c.pc });
   }
   if (rows.length) await sb.from('picks').upsert(rows, { onConflict: 'game_id,team,kind', ignoreDuplicates: true });
   const day = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
-  for (const [kind, r] of [['betvision', reco.bv], ['valor', reco.value], ['favoritos', reco.safest], ['underdogs', reco.dogParlay]]) {
+  for (const [kind, r] of [['betvision', reco.bv], ['sorpresa', reco.sorpresa], ['valor', reco.value], ['favoritos', reco.safest], ['underdogs', reco.dogParlay]]) {
     if (!r) continue;
     const legs = r.legs.map(l => ({ game_id: l.gid, team: l.team, vs: l.vs, league: l.league, start: l.start, sport_key: (games.find(g => g.id === l.gid) || {}).sport, prob: l.p, odds: l.price }));
     await sb.from('parlays').upsert({ day, kind, legs, prob: r.p, odds: r.price }, { onConflict: 'day,kind', ignoreDuplicates: true });
@@ -435,7 +572,10 @@ async function refresh() {
   }
   games.sort((a, b) => new Date(a.start) - new Date(b.start));
   try { await loadMlbContext(); } catch (e) { console.error('Contexto MLB:', e.message); }
-  games.forEach(g => { g.ctx = mlbContextFor(g); applyContext(g); });
+  const newLines = [];
+  for (const g of games) if (!openLines[g.id]) { openLines[g.id] = Object.fromEntries(g.outcomes.map(o => [o.name, o.p])); newLines.push({ game_id: g.id, data: openLines[g.id] }); }
+  if (sb && newLines.length) sb.from('lines').upsert(newLines, { onConflict: 'game_id', ignoreDuplicates: true }).then(() => {}, () => {});
+  games.forEach(g => { g.mktFlags = marketFlags(g); g.ctx = mlbContextFor(g); applyContext(g); });
   cache = { ...cache, updated: new Date().toISOString(), games, reco: recommend(games), errors };
   try { await recordPicks(games, cache.reco); await updateClosing(games); await gradeAll(); } catch (e) { console.error('Récord/apuestas:', e.message); }
   console.log(`[${cache.updated}] ${games.length} partidos. Créditos restantes: ${cache.remaining}`);
@@ -472,12 +612,12 @@ async function syncSubscription(sub) {
 }
 function publicData(full) {
   // Versión gratis: partidos y probabilidades; sin valor, cuotas justas ni parlays.
-  return { ...full, premium: false, reco: null, games: full.games.map(g => ({ ...g, pick: null, ctx: g.ctx ? { locked: true } : null, outcomes: g.outcomes.map(o => ({ name: o.name, p: o.p })) })) };
+  return { ...full, premium: false, reco: null, games: full.games.map(g => ({ ...g, pick: null, mktFlags: [], arb: null, ctx: g.ctx ? { locked: true } : null, outcomes: g.outcomes.map(o => ({ name: o.name, p: o.p })) })) };
 }
 
 
 /* ---------- Pregúntale a BetVision: analista con IA (API de Claude) ---------- */
-const ASK_LIMIT = Number(E.ASK_LIMIT) || 20;           // preguntas por usuario al día
+const ASK_LIMIT = Number(E.ASK_LIMIT) || 5;            // preguntas por usuario al día
 const askCount = new Map();
 function askAllowed(uid) {
   const day = new Date().toISOString().slice(0, 10), c = askCount.get(uid);
@@ -494,7 +634,7 @@ function dataForAI() {
     local: g.home, visita: g.away,
     seleccion_betvision: g.pick ? { estado: ({ verde: 'Recomendación', amarillo: 'Recomendación con incertidumbre alta', blanco: 'Sin ventaja estadística clara' })[g.pick.state], equipo: g.pick.team, underdog: g.pick.underdog, prob_modelo: +(g.pick.pM * 100).toFixed(1), prob_del_precio: +(g.pick.pImpl * 100).toFixed(1), incertidumbre: g.pick.unc } : null,
     selecciones: g.outcomes.map(o => ({ equipo: o.name, prob_casas: +(o.p * 100).toFixed(1), prob_betvision: +((o.pBV != null ? o.pBV : o.p) * 100).toFixed(1), cuota: usOdds(o.myPrice || o.best.price), casa: o.myPrice ? o.myBook : o.best.book, valor_pct: +(((o.pBV != null ? o.pBV : o.p) * (o.myPrice || o.best.price) - 1) * 100).toFixed(1) })),
-    contexto: g.ctx ? { tipo: g.ctx.series || null, serie: g.ctx.serie, local: g.ctx.home, visita: g.ctx.away, juegos_recientes_entre_ellos: g.ctx.h2h, alertas: g.ctx.flags.map(f => f.text) } : 'sin datos de contexto'
+    contexto: g.ctx ? { simulacion: g.ctx.sim ? { juegos: g.ctx.sim.n, prob_local: +(g.ctx.sim.pHome * 100).toFixed(1), carreras_local: +g.ctx.sim.runsH.toFixed(1), carreras_visita: +g.ctx.sim.runsA.toFixed(1) } : null, tipo: g.ctx.series || null, serie: g.ctx.serie, local: g.ctx.home, visita: g.ctx.away, juegos_recientes_entre_ellos: g.ctx.h2h, alertas: g.ctx.flags.map(f => f.text) } : 'sin datos de contexto'
   }));
 }
 const AI_RULES = `Eres el analista de BetVision (100xBajo). Hablas en español sencillo, directo y sin vender humo, para apostadores latinos en EE. UU. Usas "macho" para el favorito y "hembra" para el underdog.
@@ -520,16 +660,19 @@ REGLAS FIJAS:
 - Nunca digas "seguro", "sí o sí", "fijo" ni "garantizado". Di cuántas veces de cada 100 puede perder.
 - Si un rival ya clasificó y puede descansar, recomienda confirmar la alineación.
 - "Ambiente y calle": puedes buscar en internet noticias de última hora (lesiones, alineaciones, bajas, peleas en el vestuario, problemas con la directiva, rivalidad, ambiente del estadio). Separa siempre lo CONFIRMADO (con la fuente) de los RUMORES, y nunca conviertas un rumor en probabilidad. Tradúcelo en consejos cortos y claros, por ejemplo: "Juega sin su estrella: esa pata baja de 🟢 a ⚠️".
+- Cada partido de MLB puede traer "simulacion" (Monte Carlo de 10,000 juegos con ofensiva, abridor, bullpen y localía). Úsala como segunda opinión: si la simulación y las casas no coinciden, explica por qué puede ser y recuerda que el Récord mide cuál de las dos acierta más.
+- Piensa como un analista profesional: (1) valor esperado y cuota justa, (2) suerte contra calidad (récord pitagórico: un equipo con más victorias que las que dicen sus carreras suele bajar), (3) cansancio (muchos juegos seguidos, juego de día tras jugar de noche), (4) movimiento de línea (si la línea se mueve sin noticias, suele ser dinero grande), (5) comparar casas y arbitraje, (6) tamaño de apuesta tipo Kelly fraccionado. Nunca prometas que esto gana siempre: es ventaja a largo plazo.
 - El clima, el récord de local/visitante y los consejos rápidos (chips) vienen en los datos; úsalos. La lluvia es un riesgo de suspensión, no de resultado.
 - Si el cerrador de un equipo está cansado, súbele el riesgo a esa pata, sobre todo en juegos cerrados.
 - Al usuario le gusta la estrategia "Rebote": equipos que perdieron su último juego (sobre todo si juegan por su vida en playoffs), combinados con alguna cuota que pague bien y pocas patas (2 o 3). Señala qué equipos están en rebote, pero dile con honestidad que perder ayer, por sí solo, no está comprobado como ventaja y que las casas ya lo meten en la cuota; lo que decide es el pitcheo y el precio.
 - Cada partido trae "seleccion_betvision" (🟢 Recomendación, 🟡 con incertidumbre alta, ⚪ sin ventaja clara). Úsala y explica la diferencia entre "creo que puede ganar" y "es buena apuesta": probabilidad del modelo contra la probabilidad que implica el precio. Si es ⚪, dilo sin forzar certeza.
+- Si te piden algo arriesgado, usa el "Parlay sorpresa": underdogs con 2 o más razones reales (pitcheo, cerrador rival cansado, historial entre ellos, racha, buen visitante). Explica cada razón y di claramente que es de bajo porcentaje: apuesta pequeña.
 - Termina siempre con "🧠 Recomendación BetVision": tu jugada final basada en TODO (pitcheo completo, valor, contexto, rebote), en 2 o 3 patas como máximo, con probabilidad aproximada del parlay, cuánto cobra con $20 y cuál es la pata más débil. Si es con bonus bet, recuerda que el bonus no se devuelve: solo se cobra la ganancia.
 - Sugiere montos pequeños: 1 % o 2 % del presupuesto.
 - Escribe para el teléfono: párrafos cortos y emojis solo para el riesgo. Máximo unas 350 palabras.
 - Termina siempre con: "Juega responsable. (esto es 100 pa bajo)"`;
-async function askClaude(messages) {
-  const system = `${AI_RULES}\n\nFecha y hora actual (Este de EE. UU.): ${new Date().toLocaleString('es', { timeZone: 'America/New_York', dateStyle: 'full', timeStyle: 'short' })}.\nCuotas actualizadas: ${cache.updated || 'desconocido'}.\n\nDatos de los próximos partidos (JSON):\n${JSON.stringify(dataForAI())}`;
+async function askClaude(messages, lang = 'es') {
+  const system = `${AI_RULES}${lang === 'en' ? '\n\nIMPORTANT: The user is using the app in ENGLISH. Write your whole answer in English (same format and rules: per-leg risk, "What really worries me" section, never say "lock"/"guaranteed", and end with "Play responsibly. (this is 100 pa bajo)"). Team/data fields may be in Spanish; translate them.' : ''}\n\nFecha y hora actual (Este de EE. UU.): ${new Date().toLocaleString('es', { timeZone: 'America/New_York', dateStyle: 'full', timeStyle: 'short' })}.\nCuotas actualizadas: ${cache.updated || 'desconocido'}.\n\nDatos de los próximos partidos (JSON):\n${JSON.stringify(dataForAI())}`;
   const r = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: { 'content-type': 'application/json', 'x-api-key': E.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01' },
@@ -541,6 +684,9 @@ async function askClaude(messages) {
 }
 
 /* ---------- HTTP ---------- */
+const WL_HITS = new Map();
+// La oferta está activa si hay cupón y no pasó la fecha límite (PROMO_UNTIL, formato 2026-12-31)
+const promoOn = () => !!E.PROMO_COUPON && (!E.PROMO_UNTIL || Date.now() < new Date(E.PROMO_UNTIL + 'T23:59:59-05:00').getTime());
 const send = (res, code, obj) => { res.writeHead(code, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' }); res.end(JSON.stringify(obj)); };
 const readBody = req => new Promise((ok, ko) => { const c = []; req.on('data', d => c.push(d)); req.on('end', () => ok(Buffer.concat(c))); req.on('error', ko); });
 const INDEX = path.join(__dirname, 'index.html');
@@ -549,7 +695,7 @@ http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://x');
   const p = url.pathname;
   try {
-    if (p === '/api/config') return send(res, 200, { supabaseUrl: SUPA_URL, supabaseAnon: SUPA_ANON, price: E.PRICE_LABEL || '$99 al mes', trialDays: TRIAL_DAYS, affiliates: AFFILIATES.map(({ key, name, offer, states }) => ({ key, name, offer: offer || '', states: states || [] })) });
+    if (p === '/api/config') return send(res, 200, { supabaseUrl: SUPA_URL, supabaseAnon: SUPA_ANON, price: E.PRICE_LABEL || '$9.99 al mes', promo: promoOn() ? { price: E.PROMO_PRICE || '$9.99', months: +(E.PROMO_MONTHS || 3) } : null, trialDays: TRIAL_DAYS, affiliates: AFFILIATES.map(({ key, name, offer, states }) => ({ key, name, offer: offer || '', states: states || [] })) });
 
     if (p === '/go') {
       const key = url.searchParams.get('b'), target = url.searchParams.get('u');
@@ -597,6 +743,32 @@ http.createServer(async (req, res) => {
       return send(res, 200, isPremium(prof) ? { ...cache, premium: true } : publicData(cache));
     }
 
+    // ---------- Lista de espera (pública) ----------
+    if (p === '/espera') {
+      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-cache' });
+      return res.end(fs.readFileSync(path.join(__dirname, 'espera.html'), 'utf8'));
+    }
+    if (p === '/api/waitlist/count') {
+      if (!sb) return send(res, 200, { count: 0 });
+      const { count } = await sb.from('waitlist').select('id', { count: 'exact', head: true });
+      return send(res, 200, { count: count || 0 });
+    }
+    if (p === '/api/waitlist' && req.method === 'POST') {
+      if (!sb) return send(res, 503, { error: 'La lista todavía no está configurada.' });
+      const ip = (req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').split(',')[0].trim();
+      const now = Date.now(), hits = (WL_HITS.get(ip) || []).filter(x => now - x < 3600e3);
+      if (hits.length >= 8) return send(res, 429, { error: 'Demasiados intentos. Prueba más tarde.' });
+      WL_HITS.set(ip, [...hits, now]);
+      let b = {}; try { b = JSON.parse((await readBody(req)).toString() || '{}'); } catch (e) { }
+      const kind = b.kind === 'phone' ? 'phone' : 'email';
+      let contact = String(b.contact || '').trim().slice(0, 120);
+      if (kind === 'email') { contact = contact.toLowerCase(); if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(contact)) return send(res, 400, { error: 'Correo no válido.' }); }
+      else { const d = contact.replace(/\D/g, ''); if (d.length < 10 || d.length > 15) return send(res, 400, { error: 'Número no válido.' }); contact = '+' + (d.length === 10 ? '1' + d : d); }
+      const { error } = await sb.from('waitlist').upsert({ contact, kind, lang: b.lang === 'en' ? 'en' : 'es', source: String(b.source || '').slice(0, 120) }, { onConflict: 'contact', ignoreDuplicates: true });
+      if (error) { console.error('Lista de espera', error.message); return send(res, 500, { error: 'No se pudo guardar. Intenta de nuevo.' }); }
+      return send(res, 200, { ok: true });
+    }
+
     if (p.startsWith('/api/')) {
       const user = await getUser(req);
       if (!user) return send(res, 401, { error: 'Inicia sesión' });
@@ -616,6 +788,8 @@ http.createServer(async (req, res) => {
         const session = await stripe.checkout.sessions.create({
           mode: 'subscription',
           line_items: [{ price: E.STRIPE_PRICE_ID, quantity: 1 }],
+          // Oferta de lanzamiento: cupón de Stripe (por ejemplo $9.99 los primeros 3 meses)
+          ...(promoOn() ? { discounts: [{ coupon: E.PROMO_COUPON }] } : {}),
           // Si todavía le quedan días de prueba (más de 2), el primer cobro llega cuando termina la prueba
           subscription_data: onAppTrial(prof) && new Date(prof.trial_ends).getTime() - Date.now() > 2 * 864e5 ? { trial_end: Math.floor(new Date(prof.trial_ends).getTime() / 1000) } : undefined,
           client_reference_id: user.id,
@@ -641,7 +815,7 @@ http.createServer(async (req, res) => {
         if (!msgs.length || msgs[msgs.length - 1].role !== 'user') return send(res, 400, { error: 'Escribe una pregunta.' });
         while (msgs.length && msgs[0].role !== 'user') msgs.shift();
         if (!askAllowed(user.id)) return send(res, 429, { error: `Llegaste al límite de ${ASK_LIMIT} preguntas por hoy. Vuelve mañana.` });
-        try { return send(res, 200, { answer: await askClaude(msgs) }); }
+        try { return send(res, 200, { answer: await askClaude(msgs, b.lang === 'en' ? 'en' : 'es') }); }
         catch (e) { console.error('Asistente:', e.message); return send(res, 502, { error: 'El asistente no respondió. Intenta de nuevo en un momento.' }); }
       }
       if (p === '/api/bets' && req.method === 'GET') {
@@ -669,7 +843,7 @@ http.createServer(async (req, res) => {
     if (p === '/terminos') {
       const t = fs.readFileSync(path.join(__dirname, 'terminos.html'), 'utf8')
         .replaceAll('{{CONTACT}}', E.CONTACT_EMAIL || 'el correo de contacto de BetVision')
-        .replaceAll('{{PRICE}}', E.PRICE_LABEL || '$99 al mes')
+        .replaceAll('{{PRICE}}', E.PRICE_LABEL || '$9.99 al mes')
         .replaceAll('{{TRIAL}}', String(TRIAL_DAYS))
         .replaceAll('{{DATE}}', E.TERMS_DATE || '26 de septiembre de 2026');
       res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
@@ -688,5 +862,5 @@ http.createServer(async (req, res) => {
   }
 }).listen(PORT, () => console.log(`BetVision escuchando en el puerto ${PORT}`));
 
-refresh();
+loadOpenLines().then(refresh);
 setInterval(refresh, REFRESH_MIN * 60 * 1000);
