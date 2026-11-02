@@ -13,7 +13,7 @@ const SPORTS = (E.SPORTS || 'baseball_mlb,americanfootball_nfl').split(',').map(
 const REGIONS = E.REGIONS || 'us';
 const MY_BOOK = E.MY_BOOK || 'hardrockbet';
 const REFRESH_MIN = Number(E.REFRESH_MIN) || 180;
-const TRIAL_DAYS = Number(E.TRIAL_DAYS) || 7;
+const TRIAL_DAYS = Number(E.TRIAL_DAYS) || 15;
 const SCORES_MIN = Number(E.SCORES_MIN) || 360;   // cada cuánto consultar marcadores (cuesta créditos)
 const PICK_MIN_EV = Number(E.PICK_MIN_EV) || 0.03; // valor mínimo para guardar una selección en el récord
 
@@ -578,6 +578,7 @@ async function refresh() {
   games.forEach(g => { g.mktFlags = marketFlags(g); g.ctx = mlbContextFor(g); applyContext(g); });
   cache = { ...cache, updated: new Date().toISOString(), games, reco: recommend(games), errors };
   try { await recordPicks(games, cache.reco); await updateClosing(games); await gradeAll(); } catch (e) { console.error('Récord/apuestas:', e.message); }
+  dailyPush(games).catch(e => console.error('Avisos push:', e.message));
   console.log(`[${cache.updated}] ${games.length} partidos. Créditos restantes: ${cache.remaining}`);
 }
 
@@ -585,7 +586,10 @@ async function refresh() {
 const paying = p => !!p && ['active', 'trialing'].includes(p.sub_status);
 const onAppTrial = p => !!p && !!p.trial_ends && new Date(p.trial_ends).getTime() > Date.now();
 // Premium = suscripción de Stripe activa, o los días de prueba gratis sin tarjeta
-const isPremium = p => paying(p) || onAppTrial(p);
+const appleActive = p => !!p && !!p.iap_expires && new Date(p.iap_expires).getTime() > Date.now();
+const REVIEW_EMAILS = (E.REVIEW_EMAILS || '').toLowerCase().split(',').map(s => s.trim()).filter(Boolean);
+const isReviewer = p => !!p && !!p.email && REVIEW_EMAILS.includes(String(p.email).toLowerCase());
+const isPremium = p => paying(p) || appleActive(p) || onAppTrial(p) || isReviewer(p);
 async function getUser(req) {
   const h = req.headers.authorization || '';
   if (!sb || !h.startsWith('Bearer ')) return null;
@@ -615,6 +619,105 @@ function publicData(full) {
   return { ...full, premium: false, reco: null, games: full.games.map(g => ({ ...g, pick: null, mktFlags: [], arb: null, ctx: g.ctx ? { locked: true } : null, outcomes: g.outcomes.map(o => ({ name: o.name, p: o.p })) })) };
 }
 
+
+
+/* ---------- Avisos push al iPhone (Apple Push Notification service) ---------- */
+// Variables: APNS_KEY (contenido del archivo .p8), APNS_KEY_ID, APPLE_TEAM_ID, IOS_BUNDLE_ID, APNS_SANDBOX=1 para pruebas
+const http2 = require('http2');
+const crypto = require('crypto');
+let apnsJwt = { t: 0, v: '' };
+function apnsToken() {
+  if (Date.now() - apnsJwt.t < 40 * 60e3) return apnsJwt.v;
+  const b64 = o => Buffer.from(JSON.stringify(o)).toString('base64url');
+  const head = b64({ alg: 'ES256', kid: E.APNS_KEY_ID }), body = b64({ iss: E.APPLE_TEAM_ID, iat: Math.floor(Date.now() / 1000) });
+  const key = String(E.APNS_KEY).replace(/\\n/g, '\n');
+  const sig = crypto.sign('sha256', Buffer.from(head + '.' + body), { key, dsaEncoding: 'ieee-p1363' }).toString('base64url');
+  apnsJwt = { t: Date.now(), v: `${head}.${body}.${sig}` };
+  return apnsJwt.v;
+}
+const pushReady = () => !!(E.APNS_KEY && E.APNS_KEY_ID && E.APPLE_TEAM_ID && E.IOS_BUNDLE_ID);
+function sendPush(tokens, alert) {
+  if (!pushReady() || !tokens.length) return Promise.resolve([]);
+  return new Promise(done => {
+    const host = E.APNS_SANDBOX === '1' ? 'https://api.sandbox.push.apple.com' : 'https://api.push.apple.com';
+    const cli = http2.connect(host), bad = [];
+    let left = tokens.length;
+    const fin = () => { if (--left <= 0) { cli.close(); done(bad); } };
+    cli.on('error', e => { console.error('APNs:', e.message); try { cli.close(); } catch (x) { } done(bad); });
+    for (const t of tokens) {
+      const r = cli.request({ ':method': 'POST', ':path': '/3/device/' + t, authorization: 'bearer ' + apnsToken(), 'apns-topic': E.IOS_BUNDLE_ID, 'apns-push-type': 'alert', 'apns-priority': '10' });
+      r.setEncoding('utf8');
+      let st = 0; r.on('response', h => { st = h[':status']; });
+      r.on('data', () => { }); r.on('end', () => { if (st === 410 || st === 400) bad.push(t); fin(); }); r.on('error', fin);
+      r.end(JSON.stringify({ aps: { alert, sound: 'default' } }));
+    }
+  });
+}
+// Una vez al día (desde las 11 a. m. hora del Este): "Hoy hay N selecciones 🟢"
+async function dailyPush(games) {
+  if (!sb || !pushReady()) return;
+  const now = new Date(), day = now.toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+  const hour = +now.toLocaleString('en-US', { timeZone: 'America/New_York', hour: 'numeric', hour12: false });
+  if (hour < 11 || hour > 20) return;
+  const verdes = games.filter(g => g.pick && g.pick.state === 'verde' && new Date(g.start).getTime() > Date.now()
+    && new Date(g.start).toLocaleDateString('en-CA', { timeZone: 'America/New_York' }) === day);
+  if (!verdes.length) return;
+  const { error } = await sb.from('push_log').insert({ day, kind: 'verdes' });
+  if (error) return; // ya se envió hoy
+  const { data: rows } = await sb.from('push_tokens').select('token,lang');
+  if (!rows || !rows.length) return;
+  const n = verdes.length;
+  const msg = {
+    es: { title: `Hoy hay ${n} ${n === 1 ? 'selección' : 'selecciones'} 🟢`, body: 'Ábrelas en BetVision antes de que se mueva la línea.' },
+    en: { title: `${n} green ${n === 1 ? 'pick' : 'picks'} today 🟢`, body: 'Open BetVision before the line moves.' }
+  };
+  let bad = [];
+  for (const lang of ['es', 'en']) bad = bad.concat(await sendPush(rows.filter(r => (r.lang || 'es') === lang).map(r => r.token), msg[lang]));
+  if (bad.length) await sb.from('push_tokens').delete().in('token', bad);
+  console.log(`Avisos enviados: ${rows.length - bad.length}`);
+}
+
+/* ---------- Compras dentro de la app (Apple) vía RevenueCat ---------- */
+// RevenueCat avisa aquí cada compra, renovación o cancelación. El app_user_id es el id del usuario en Supabase.
+async function revenueCatEvent(ev) {
+  const uid = ev.app_user_id;
+  if (!uid || !/^[0-9a-f-]{36}$/i.test(uid)) return;
+  const exp = ev.expiration_at_ms ? new Date(ev.expiration_at_ms).toISOString() : null;
+  const t = ev.type;
+  if (['INITIAL_PURCHASE', 'RENEWAL', 'PRODUCT_CHANGE', 'UNCANCELLATION', 'NON_RENEWING_PURCHASE', 'SUBSCRIPTION_EXTENDED', 'TEMPORARY_ENTITLEMENT_GRANT'].includes(t))
+    await sb.from('profiles').update({ iap_status: 'active', iap_expires: exp }).eq('id', uid);
+  else if (t === 'CANCELLATION') await sb.from('profiles').update({ iap_status: 'canceled', iap_expires: exp }).eq('id', uid); // sigue Premium hasta que vence
+  else if (t === 'EXPIRATION') await sb.from('profiles').update({ iap_status: 'expired', iap_expires: exp }).eq('id', uid);
+  else if (t === 'BILLING_ISSUE') await sb.from('profiles').update({ iap_status: 'billing_issue' }).eq('id', uid);
+}
+async function revenueCatSync(uid) {
+  // Por si el aviso tarda: preguntamos directo a RevenueCat
+  if (!E.REVENUECAT_SECRET) return null;
+  const r = await fetch('https://api.revenuecat.com/v1/subscribers/' + encodeURIComponent(uid), { headers: { Authorization: 'Bearer ' + E.REVENUECAT_SECRET } });
+  if (!r.ok) return null;
+  const j = await r.json(), ent = (j.subscriber && j.subscriber.entitlements) || {};
+  const e = ent[E.REVENUECAT_ENTITLEMENT || 'premium'];
+  if (!e || !e.expires_date) return null;
+  const upd = { iap_status: new Date(e.expires_date).getTime() > Date.now() ? 'active' : 'expired', iap_expires: e.expires_date };
+  await sb.from('profiles').update(upd).eq('id', uid);
+  return upd;
+}
+
+/* ---------- Borrar cuenta (lo exige Apple) ---------- */
+async function deleteAccount(user, prof) {
+  if (stripe && prof.stripe_customer_id) {
+    try {
+      const subs = await stripe.subscriptions.list({ customer: prof.stripe_customer_id, status: 'all', limit: 20 });
+      for (const s of subs.data) if (!['canceled', 'incomplete_expired'].includes(s.status)) await stripe.subscriptions.cancel(s.id);
+    } catch (e) { console.error('Borrar cuenta (Stripe):', e.message); }
+  }
+  await sb.from('bets').delete().eq('user_id', user.id);
+  await sb.from('push_tokens').delete().eq('user_id', user.id);
+  await sb.from('clicks').update({ user_id: null }).eq('user_id', user.id);
+  await sb.from('profiles').delete().eq('id', user.id);
+  const { error } = await sb.auth.admin.deleteUser(user.id);
+  if (error) throw error;
+}
 
 /* ---------- Pregúntale a BetVision: analista con IA (API de Claude) ---------- */
 const ASK_LIMIT = Number(E.ASK_LIMIT) || 5;            // preguntas por usuario al día
@@ -695,7 +798,7 @@ http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://x');
   const p = url.pathname;
   try {
-    if (p === '/api/config') return send(res, 200, { supabaseUrl: SUPA_URL, supabaseAnon: SUPA_ANON, price: E.PRICE_LABEL || '$9.99 al mes', promo: promoOn() ? { price: E.PROMO_PRICE || '$9.99', months: +(E.PROMO_MONTHS || 3) } : null, trialDays: TRIAL_DAYS, affiliates: AFFILIATES.map(({ key, name, offer, states }) => ({ key, name, offer: offer || '', states: states || [] })) });
+    if (p === '/api/config') return send(res, 200, { supabaseUrl: SUPA_URL, supabaseAnon: SUPA_ANON, price: E.PRICE_LABEL || '$9.99 al mes', promo: promoOn() ? { price: E.PROMO_PRICE || '$9.99', months: +(E.PROMO_MONTHS || 3) } : null, trialDays: TRIAL_DAYS, iosKey: E.REVENUECAT_IOS_KEY || '', iosProduct: E.IOS_PRODUCT_ID || 'betvision_premium_monthly', affiliates: AFFILIATES.map(({ key, name, offer, states }) => ({ key, name, offer: offer || '', states: states || [] })) });
 
     if (p === '/go') {
       const key = url.searchParams.get('b'), target = url.searchParams.get('u');
@@ -722,6 +825,13 @@ http.createServer(async (req, res) => {
         await syncSubscription(o);
       }
       return send(res, 200, { received: true });
+    }
+
+    if (p === '/api/revenuecat-webhook' && req.method === 'POST') {
+      if (!E.REVENUECAT_WEBHOOK_AUTH || req.headers.authorization !== E.REVENUECAT_WEBHOOK_AUTH) return send(res, 401, { error: 'No autorizado' });
+      let b = {}; try { b = JSON.parse((await readBody(req)).toString() || '{}'); } catch (e) { }
+      if (sb && b.event) await revenueCatEvent(b.event);
+      return send(res, 200, { ok: true });
     }
 
     if (p === '/api/record') {
@@ -774,7 +884,7 @@ http.createServer(async (req, res) => {
       if (!user) return send(res, 401, { error: 'Inicia sesión' });
       const prof = await getProfile(user);
 
-      if (p === '/api/me' && req.method === 'GET') return send(res, 200, { email: user.email, premium: isPremium(prof), paying: paying(prof), on_trial: onAppTrial(prof) && !paying(prof), trial_ends: prof.trial_ends, sub_status: prof.sub_status, period_end: prof.period_end, bankroll: Number(prof.bankroll) || 0, state: prof.state || '', book: prof.book || '' });
+      if (p === '/api/me' && req.method === 'GET') return send(res, 200, { email: user.email, premium: isPremium(prof), paying: paying(prof), on_trial: onAppTrial(prof) && !paying(prof), trial_ends: prof.trial_ends, sub_status: prof.sub_status, period_end: prof.period_end, apple: appleActive(prof), iap_expires: prof.iap_expires || null, bankroll: Number(prof.bankroll) || 0, state: prof.state || '', book: prof.book || '' });
       if (p === '/api/me' && req.method === 'PUT') {
         const b = JSON.parse((await readBody(req)).toString() || '{}');
         const upd = {};
@@ -783,6 +893,22 @@ http.createServer(async (req, res) => {
         if (b.book !== undefined) upd.book = String(b.book).slice(0, 40);
         await sb.from('profiles').update(upd).eq('id', user.id);
         return send(res, 200, upd);
+      }
+      if (p === '/api/account' && req.method === 'DELETE') {
+        try { await deleteAccount(user, prof); return send(res, 200, { ok: true, apple: appleActive(prof) }); }
+        catch (e) { console.error('Borrar cuenta:', e.message); return send(res, 500, { error: 'No se pudo borrar la cuenta. Escríbenos y la borramos a mano.' }); }
+      }
+      if (p === '/api/iap-sync' && req.method === 'POST') {
+        const r = await revenueCatSync(user.id).catch(() => null);
+        const np = r ? { ...prof, ...r } : prof;
+        return send(res, 200, { premium: isPremium(np), apple: appleActive(np) });
+      }
+      if (p === '/api/push-token' && req.method === 'POST') {
+        let b = {}; try { b = JSON.parse((await readBody(req)).toString() || '{}'); } catch (e) { }
+        const token = String(b.token || '').replace(/[^0-9a-fA-F]/g, '');
+        if (token.length < 32 || token.length > 200) return send(res, 400, { error: 'Token inválido' });
+        await sb.from('push_tokens').upsert({ token, user_id: user.id, lang: b.lang === 'en' ? 'en' : 'es', updated_at: new Date().toISOString() }, { onConflict: 'token' });
+        return send(res, 200, { ok: true });
       }
       if (p === '/api/checkout' && req.method === 'POST') {
         const session = await stripe.checkout.sessions.create({
@@ -840,6 +966,14 @@ http.createServer(async (req, res) => {
       return send(res, 404, { error: 'No encontrado' });
     }
 
+    if (p === '/privacidad' || p === '/privacy' || p === '/soporte' || p === '/support') {
+      const f = p === '/privacidad' || p === '/privacy' ? 'privacidad.html' : 'soporte.html';
+      const t = fs.readFileSync(path.join(__dirname, f), 'utf8')
+        .replaceAll('{{CONTACT}}', E.CONTACT_EMAIL || 'soporte@betvision.app')
+        .replaceAll('{{DATE}}', E.PRIVACY_DATE || '2 de noviembre de 2026');
+      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+      return res.end(t);
+    }
     if (p === '/terminos') {
       const t = fs.readFileSync(path.join(__dirname, 'terminos.html'), 'utf8')
         .replaceAll('{{CONTACT}}', E.CONTACT_EMAIL || 'el correo de contacto de BetVision')

@@ -2,9 +2,9 @@
 <html lang="es"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>BetVision · Muy pronto</title>
-<meta name="description" content="Análisis deportivo con datos, no con corazonada. Apúntate y sé de los primeros: 7 días gratis al lanzar.">
+<meta name="description" content="Análisis deportivo con datos, no con corazonada. Apúntate y sé de los primeros: 15 días gratis al lanzar.">
 <meta property="og:title" content="BetVision · Muy pronto">
-<meta property="og:description" content="Apúntate y sé de los primeros: 7 días gratis al lanzar.">
+<meta property="og:description" content="Apúntate y sé de los primeros: 15 días gratis al lanzar.">
 <meta property="og:image" content="/icon-512.png">
 <meta name="theme-color" content="#2B0A66">
 <link rel="icon" href="/icon-192.png">
@@ -63,7 +63,7 @@ label.ck input{width:18px;height:18px;margin-top:2px;accent-color:#7C3AED;flex:n
   <div class="f"><i>🔒</i><div><b data-en="Nothing gets deleted">Nada se borra</b><span data-en="We show our wins and our losses">Enseñamos las que ganamos y las que perdemos</span></div></div>
  </div>
  <form id="f" novalidate>
-  <h2 data-en="Be one of the first: 7 days free at launch">Sé de los primeros: 7 días gratis al lanzar</h2>
+  <h2 data-en="Be one of the first: 15 days free at launch">Sé de los primeros: 15 días gratis al lanzar</h2>
   <p style="margin:-4px 0 0;font-size:15px;color:#5B5670" data-en="Then just <b style='color:#7C3AED'>$9.99/month</b>. Cancel anytime.">Después, solo <b style="color:#7C3AED">$9.99 al mes</b>. Cancela cuando quieras.</p>
   <div class="tabs" role="group" aria-label="Cómo te avisamos"><button type="button" data-k="email" aria-pressed="true" data-en="Email">Correo</button><button type="button" data-k="phone" aria-pressed="false">WhatsApp</button></div>
   <input id="email" type="email" inputmode="email" autocomplete="email" placeholder="tu@correo.com" data-en-ph="you@email.com" aria-label="Correo">
@@ -83,7 +83,7 @@ label.ck input{width:18px;height:18px;margin-top:2px;accent-color:#7C3AED;flex:n
 </main>
 <script>
 const Q=new URLSearchParams(location.search);
-let LANG=(()=>{const q=Q.get('lang');if(q==='en'||q==='es')return q;try{const v=localStorage.getItem('bv-wl-lang');if(v)return v}catch(e){}return (navigator.language||'es').toLowerCase().startsWith('en')?'en':'es'})();
+let LANG=(()=>{const q=Q.get('lang');if(q==='en'||q==='es')return q;try{const v=localStorage.getItem('bv-wl-lang');if(v)return v}catch(e){}return 'es'})();
 const ES={};document.querySelectorAll('[data-en]').forEach((e,i)=>{e.dataset.i=i;ES[i]=e.innerHTML});
 function applyLang(){document.documentElement.lang=LANG;document.querySelectorAll('[data-en]').forEach(e=>e.innerHTML=LANG==='en'?e.dataset.en:ES[e.dataset.i]);
  const em=document.getElementById('email');em.placeholder=LANG==='en'?'you@email.com':'tu@correo.com';document.getElementById('lang').textContent=LANG==='en'?'ES':'EN';document.title=LANG==='en'?'BetVision · Coming soon':'BetVision · Muy pronto';loadCount()}
@@ -102,7 +102,7 @@ document.getElementById('f').onsubmit=async e=>{e.preventDefault();msg.className
   const j=await r.json();if(!r.ok)throw new Error(j.error||'');
   document.getElementById('f').style.display='none';document.getElementById('done').style.display='block';
   const link=location.origin+'/espera?src=amigo';
-  document.getElementById('wa').href='https://wa.me/?text='+encodeURIComponent(T('Mira BetVision: análisis deportivo con datos. Apúntate y te dan 7 días gratis 👉 ','Check out BetVision: sports analysis with data. Join and get 7 days free 👉 ')+link);
+  document.getElementById('wa').href='https://wa.me/?text='+encodeURIComponent(T('Mira BetVision: análisis deportivo con datos. Apúntate y te dan 15 días gratis 👉 ','Check out BetVision: sports analysis with data. Join and get 15 days free 👉 ')+link);
   document.getElementById('cp').onclick=async()=>{try{await navigator.clipboard.writeText(link);document.getElementById('cp').textContent=T('¡Copiado!','Copied!')}catch(e){prompt('',link)}};
   loadCount();
  }catch(err){msg.className='msg err';msg.textContent=(err instanceof TypeError||!err.message)?T('No se pudo conectar. Revisa tu internet e intenta de nuevo.','Could not connect. Check your internet and try again.'):err.message}finally{go.disabled=false}};

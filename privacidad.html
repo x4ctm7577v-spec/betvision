@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Privacidad | BetVision</title>
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="icon" href="/icon-192.png">
+<style>
+:root{--bg:#0E0A24;--ink:#fff;--muted:#CBC5EC;--line:rgba(255,255,255,.13);--acc:#B9A6FF;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:light){:root:not([data-theme="dark"]){--bg:#F3F1FF;--ink:#17123A;--muted:#4E4880;--line:rgba(60,40,160,.14);--acc:#5B3BE6}}
+:root[data-theme="light"]{--bg:#F3F1FF;--ink:#17123A;--muted:#4E4880;--line:rgba(60,40,160,.14);--acc:#5B3BE6}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font-family:"Segoe UI",Roboto,Helvetica,Arial,sans-serif;line-height:1.6}
+main{max-width:720px;margin:0 auto;padding:24px 18px 60px}
+h1{font-size:28px;margin:8px 0 4px}h2{font-size:19px;margin:28px 0 6px;padding-top:16px;border-top:1px solid var(--line)}
+p,li{color:var(--muted)}b{color:var(--ink)}a{color:var(--acc);font-weight:700}
+.back{display:inline-block;margin-bottom:10px}
+</style>
+</head>
+<body>
+<main>
+<a class="back" href="/">← BetVision</a>
+<h1>Política de privacidad</h1>
+<p>Última actualización: {{DATE}} · <a href="#en">English below</a></p>
+<h2>Qué datos guardamos</h2>
+<ul>
+<li><b>Tu cuenta:</b> correo electrónico y contraseña (la contraseña la guarda cifrada nuestro proveedor de cuentas, Supabase; nosotros nunca la vemos).</li>
+<li><b>Tus ajustes:</b> bankroll, estado y casa de apuestas que elijas, si los llenas.</li>
+<li><b>Tus apuestas registradas:</b> solo las que tú anotas en la app.</li>
+<li><b>Suscripción:</b> si pagas con Apple, Apple procesa el pago y nosotros solo recibimos si tu suscripción está activa y cuándo vence (a través de RevenueCat). Si pagas en la web, el pago lo procesa Stripe; nunca vemos ni guardamos tu tarjeta.</li>
+<li><b>Avisos:</b> si aceptas notificaciones, guardamos el código del dispositivo que Apple nos da para enviarte avisos.</li>
+<li><b>Preguntas al asistente:</b> el texto de tus preguntas se envía a Anthropic (Claude) para generar la respuesta; no lo usamos para nada más.</li>
+</ul>
+<h2>Qué no hacemos</h2>
+<ul>
+<li>No vendemos tus datos.</li>
+<li>No usamos publicidad de terceros ni rastreo entre apps.</li>
+<li>No compartimos tus datos salvo con los proveedores necesarios para que la app funcione (Supabase, Render, Stripe, Apple, RevenueCat, Anthropic).</li>
+</ul>
+<h2>Borrar tu cuenta</h2>
+<p>Dentro de la app: <b>Guía → Ajustes → Borrar mi cuenta</b>. Se borran tu cuenta, tus ajustes, tus apuestas y tus avisos de inmediato. Si pagaste con Apple, cancela también la suscripción en <b>Ajustes del iPhone → tu nombre → Suscripciones</b> (Apple no nos deja cancelarla por ti). También puedes pedirlo escribiendo a <a href="mailto:{{CONTACT}}">{{CONTACT}}</a>.</p>
+<h2>Edad</h2>
+<p>BetVision es solo para personas de 21 años o más. No recogemos datos de menores a sabiendas.</p>
+<h2>Contacto</h2>
+<p><a href="mailto:{{CONTACT}}">{{CONTACT}}</a></p>
+
+<h1 id="en" style="margin-top:48px">Privacy Policy</h1>
+<p>Last updated: {{DATE}}</p>
+<h2>Data we keep</h2>
+<ul>
+<li><b>Account:</b> email and password (stored encrypted by our auth provider, Supabase; we never see it).</li>
+<li><b>Settings:</b> bankroll, state and sportsbook, if you fill them in.</li>
+<li><b>Logged bets:</b> only the ones you enter.</li>
+<li><b>Subscription:</b> Apple processes in-app payments; we only receive whether your subscription is active and when it ends (via RevenueCat). Web payments are processed by Stripe; we never see your card.</li>
+<li><b>Notifications:</b> if you allow them, we store the device token Apple provides.</li>
+<li><b>Assistant questions:</b> sent to Anthropic (Claude) only to generate the answer.</li>
+</ul>
+<h2>What we don't do</h2>
+<p>We don't sell your data, show third-party ads, or track you across apps. We share data only with the providers the app needs (Supabase, Render, Stripe, Apple, RevenueCat, Anthropic).</p>
+<h2>Delete your account</h2>
+<p>In the app: <b>Guide → Settings → Delete my account</b>. If you subscribed through Apple, also cancel in <b>iPhone Settings → your name → Subscriptions</b>. Or email <a href="mailto:{{CONTACT}}">{{CONTACT}}</a>.</p>
+<h2>Age</h2><p>BetVision is for people 21 and older only.</p>
+</main>
+</body>
+</html>

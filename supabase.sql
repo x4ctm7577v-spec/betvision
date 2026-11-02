@@ -81,3 +81,25 @@ create table if not exists waitlist (
   created_at timestamptz not null default now()
 );
 alter table waitlist enable row level security;
+
+
+-- ===== App de iPhone (App Store) =====
+-- Suscripción comprada con Apple (la avisa RevenueCat)
+alter table profiles add column if not exists iap_status text;
+alter table profiles add column if not exists iap_expires timestamptz;
+-- Teléfonos que aceptaron avisos
+create table if not exists push_tokens (
+  token text primary key,
+  user_id uuid references auth.users on delete cascade,
+  lang text default 'es',
+  updated_at timestamptz not null default now()
+);
+alter table push_tokens enable row level security;
+-- Para no mandar el mismo aviso dos veces el mismo día
+create table if not exists push_log (
+  day text not null,
+  kind text not null,
+  sent_at timestamptz not null default now(),
+  primary key (day, kind)
+);
+alter table push_log enable row level security;

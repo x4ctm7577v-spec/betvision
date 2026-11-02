@@ -1,0 +1,20 @@
+{
+  "appId": "com.betvision.cienxbajo",
+  "appName": "BetVision",
+  "webDir": "www",
+  "backgroundColor": "#0B0E14",
+  "server": {
+    "url": "https://betvision-grsh.onrender.com",
+    "cleartext": false
+  },
+  "ios": {
+    "contentInset": "never",
+    "scheme": "BetVision",
+    "limitsNavigationsToAppBoundDomains": false
+  },
+  "plugins": {
+    "SplashScreen": { "launchShowDuration": 1200, "backgroundColor": "#0B0E14", "showSpinner": false },
+    "StatusBar": { "style": "DARK", "backgroundColor": "#0B0E14" },
+    "PushNotifications": { "presentationOptions": ["badge", "sound", "alert"] }
+  }
+}
